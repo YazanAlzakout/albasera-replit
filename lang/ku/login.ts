@@ -1,0 +1,34 @@
+import type { LoginTranslations } from '../types';
+
+const login: LoginTranslations = {
+    tagline: 'Hemî Tiştan, Li Her Derê Temaşe Bike',
+    providers: 'Pêşkeşkar',
+    addProvider: 'Zêde bike',
+    addNew: 'Pêşkeşkarek Nû Zêde Bike',
+    activeProvider: 'Çalak',
+    active: 'Çalak',
+    noProviders: 'Hîn pêşkeşkar nînin',
+    noProvidersHint: 'Pêşkeşkara xwe ya yekem zêde bike.',
+    launch: 'Veke',
+    connecting: 'Tê girêdan...',
+    footer: 'AlBasira Player © 2025',
+    addProviderTitle: 'Pêşkeşkarek Nû Zêde Bike',
+    nameLabel: 'Nav',
+    namePlaceholder: 'Pêşkeşkara min',
+    urlLabel: 'URL',
+    urlPlaceholder: 'http://server.com:8080',
+    usernameLabel: 'Navê bikarhêner',
+    usernamePlaceholder: 'bikarhêner',
+    passwordLabel: 'Şîfre',
+    passwordPlaceholder: '••••••••',
+    saveProvider: 'Pêşkeşkar Tomar Bike',
+    fillAllFields: 'Ji kerema xwe hemû qadan dagire',
+    deleteProviderTitle: 'Pêşkeşkar Jê Bibe',
+    deleteProviderMsg: 'Tu bawer î ku dixwazî vê pêşkeşkarê jê bibî?',
+    connectionError: 'Çewtiya Girêdanê',
+    connectionErrorMsg: 'Nikare bi pêşkêşkarê re têkiliyê dayne. Ji kerema xwe agahiyên xwe kontrol bike.',
+    noProviderAlert: 'Daxuyanî',
+    noProviderAlertMsg: 'Ji kerema xwe pêşî pêşkeşkarek zêde bike',
+};
+
+export default login;

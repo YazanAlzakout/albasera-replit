@@ -1,0 +1,6 @@
+- [Package firewall and Git dependencies](package-firewall-git-dependencies.md) — source-prepared Git packages can install blocked dev dependencies; prefer a compatible registry release.
+- [Expo Video shared objects](expo-video-shared-objects.md) — source replacement can invalidate native player objects; avoid stale imperative references and duplicate reload paths.
+- [Native Android build verification](native-android-build-verification.md) — this Replit environment lacks Android SDK; use EAS to verify native APK builds after local prebuild checks.
+- [Expo Go compatibility](expo-go-compatibility.md) — keep the default phone workflow compatible with Expo Go; custom native players must not force a development build.
+- [Expo web preview process cleanup](expo-web-preview-process-cleanup.md) — a failed Expo web workflow can leave a child process that causes false port-in-use prompts on restart.
+- [MP2 audio strategy](mp2-audio-strategy.md) — preserve Expo Go with HLS/TS fallbacks; universal MP2 support requires a separate native build.

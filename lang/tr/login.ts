@@ -1,0 +1,34 @@
+import type { LoginTranslations } from '../types';
+
+const login: LoginTranslations = {
+    tagline: 'Her Şeyi, Her Yerde İzleyin',
+    providers: 'Sağlayıcılar',
+    addProvider: 'Ekle',
+    addNew: 'Yeni Sağlayıcı Ekle',
+    activeProvider: 'Aktif',
+    active: 'Aktif',
+    noProviders: 'Henüz sağlayıcı yok',
+    noProvidersHint: 'Henüz sağlayıcı yok. İlk sağlayıcınızı ekleyin.',
+    launch: 'Başlat',
+    connecting: 'Bağlanıyor...',
+    footer: 'AlBasira Player © 2025',
+    addProviderTitle: 'Yeni Sağlayıcı Ekle',
+    nameLabel: 'İsim',
+    namePlaceholder: 'Sağlayıcım',
+    urlLabel: 'URL',
+    urlPlaceholder: 'http://server.com:8080',
+    usernameLabel: 'Kullanıcı Adı',
+    usernamePlaceholder: 'kullanıcı_adı',
+    passwordLabel: 'Şifre',
+    passwordPlaceholder: '••••••••',
+    saveProvider: 'Sağlayıcıyı Kaydet',
+    fillAllFields: 'Lütfen tüm alanları doldurun',
+    deleteProviderTitle: 'Sağlayıcıyı Sil',
+    deleteProviderMsg: 'Bu sağlayıcıyı silmek istediğinize emin misiniz?',
+    connectionError: 'Bağlantı Hatası',
+    connectionErrorMsg: 'Sunucuya bağlanılamadı. Lütfen kimlik bilgilerinizi kontrol edin.',
+    noProviderAlert: 'Uyarı',
+    noProviderAlertMsg: 'Lütfen önce bir sağlayıcı ekleyin',
+};
+
+export default login;

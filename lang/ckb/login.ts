@@ -1,0 +1,34 @@
+import type { LoginTranslations } from '../types';
+
+const login: LoginTranslations = {
+    tagline: 'هەموو شتێک ببینه، لە هەموو شوێنێک',
+    providers: 'پێشکەشکارەکان',
+    addProvider: 'زیادکردن',
+    addNew: 'پێشکەشکارێکی نوێ زیادبکە',
+    activeProvider: 'چالاکە',
+    active: 'چالاکە',
+    noProviders: 'هێشتا پێشکەشکار نییە',
+    noProvidersHint: 'هیچ پێشکەشکارێک نییە. یەکەم پێشکەشکار زیادبکە.',
+    launch: 'کردنەوە',
+    connecting: 'پەیوەندی دەبەستێت...',
+    footer: 'AlBasira Player © 2025',
+    addProviderTitle: 'پێشکەشکارێکی نوێ زیادبکە',
+    nameLabel: 'ناو',
+    namePlaceholder: 'پێشکەشکارەکەم',
+    urlLabel: 'بەستەر',
+    urlPlaceholder: 'http://server.com:8080',
+    usernameLabel: 'ناوی بەکارهێنەر',
+    usernamePlaceholder: 'بەکارهێنەر',
+    passwordLabel: 'تێپەڕەوشە',
+    passwordPlaceholder: '••••••••',
+    saveProvider: 'پاشەکەوتکردنی پێشکەشکار',
+    fillAllFields: 'تکایە هەموو خانەکان پڕبکەرەوە',
+    deleteProviderTitle: 'سڕینەوەی پێشکەشکار',
+    deleteProviderMsg: 'دڵنیایت دەتەوێت ئەم پێشکەشکارە بسڕیتەوە؟',
+    connectionError: 'هەڵەی پەیوەندی',
+    connectionErrorMsg: 'نەتوانرا پەیوەندی بە ڕاژەوە بکرێت. تکایە زانیارییەکانت بپشکنە.',
+    noProviderAlert: 'ئاگاداری',
+    noProviderAlertMsg: 'تکایە سەرەتا پێشکەشکارێک زیادبکە',
+};
+
+export default login;
