@@ -1,23 +1,29 @@
 name: Build FFmpeg MP2 decoder (Media3, LGPL-safe)
 
-# Manual only — this never runs on push/PR, so it can't fire against main or
-# any branch by accident. Trigger it yourself from the Actions tab once
-# you're ready (Phase 2, after reviewing this file).
+# Push-triggered, scoped to mp2-vlc-support only, and further scoped to only
+# fire when this workflow file or the vendored module actually change — not
+# on every unrelated commit to that branch.
+#
+# NOTE: workflow_dispatch was deliberately dropped. GitHub only allows manually
+# dispatching a workflow if its YAML file exists on the repository's default
+# branch (main here) — confirmed via the Actions API, not assumed. Since this
+# workflow must stay off main until it's reviewed and proven, `push` is the
+# only trigger that actually works from a non-default branch.
 on:
-  workflow_dispatch:
-    inputs:
-      ffmpeg_ref:
-        description: "FFmpeg git ref to build (must stay LGPL-safe; do not pass a ref that requires --enable-gpl/--enable-nonfree)"
-        required: false
-        default: "release/6.0"
-      ndk_version:
-        description: "Android NDK version (matches modules/decoder-ffmpeg-mp2/android/UPSTREAM_README.md)"
-        required: false
-        default: "r26b"
-      android_abi:
-        description: "Native API level for the build (must not exceed the app's minSdkVersion, currently 26; module default is 24)"
-        required: false
-        default: "24"
+  push:
+    branches:
+      - mp2-vlc-support
+    paths:
+      - ".github/workflows/build-ffmpeg-mp2-decoder.yml"
+      - "modules/decoder-ffmpeg-mp2/**"
+
+env:
+  # LGPL-safe FFmpeg ref and NDK version, matching
+  # modules/decoder-ffmpeg-mp2/android/UPSTREAM_README.md. Native API level
+  # must not exceed the app's minSdkVersion (currently 26; module default 24).
+  FFMPEG_REF: "release/6.0"
+  NDK_VERSION: "r26b"
+  ANDROID_ABI: "24"
 
 # Least-privilege: this job only needs to read the repo and upload an
 # artifact. No contents:write, no ability to push/commit anything.
@@ -32,19 +38,17 @@ jobs:
       - name: Checkout albasera-replit (this repo, this ref only)
         uses: actions/checkout@v4
 
-      - name: Install Android NDK ${{ inputs.ndk_version }}
+      - name: Install Android NDK ${{ env.NDK_VERSION }}
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: ${{ inputs.ndk_version }}
+          ndk-version: ${{ env.NDK_VERSION }}
           local-cache: true
 
       - name: Install FFmpeg build dependencies
         run: sudo apt-get update && sudo apt-get install -y yasm
 
-      - name: Fetch FFmpeg (${{ inputs.ffmpeg_ref }})
-        env:
-          FFMPEG_REF: ${{ inputs.ffmpeg_ref }}
+      - name: Fetch FFmpeg (${{ env.FFMPEG_REF }})
         run: |
           set -eu
           git clone --depth 1 --branch "${FFMPEG_REF}" https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
@@ -69,7 +73,7 @@ jobs:
       - name: Build FFmpeg (mp2 decoder only) for armeabi-v7a + arm64-v8a
         env:
           NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
-          ANDROID_ABI: ${{ inputs.android_abi }}
+          # ANDROID_ABI comes from the workflow-level env: block above.
         run: |
           set -eu
           HOST_PLATFORM="linux-x86_64"
