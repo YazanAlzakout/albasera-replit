@@ -1,8 +1,8 @@
 diff --git a/node_modules/expo-video/android/build.gradle b/node_modules/expo-video/android/build.gradle
-index f17d2d4..cd1852c 100644
+index f17d2d4..eb900e6 100644
 --- a/node_modules/expo-video/android/build.gradle
 +++ b/node_modules/expo-video/android/build.gradle
-@@ -26,6 +26,13 @@ dependencies {
+@@ -26,7 +26,19 @@ dependencies {
    implementation "androidx.media3:media3-ui:${androidxMedia3Version}"
    implementation "androidx.media3:media3-datasource-okhttp:${androidxMedia3Version}"
  
@@ -12,10 +12,16 @@ index f17d2d4..cd1852c 100644
 +  // modules/decoder-ffmpeg-mp2 (repo root) instead of node_modules, since this
 +  // file only survives via patch-package (node_modules is not reproducible).
 +  implementation project(':decoder-ffmpeg-mp2')
++  println "[expo-video] declared implementation project(':decoder-ffmpeg-mp2')"
 +
    def fragment_version = "1.6.2"
    implementation "androidx.fragment:fragment:$fragment_version"
    implementation "androidx.fragment:fragment-ktx:$fragment_version"
+ }
++
++afterEvaluate {
++  println "[expo-video] implementation deps: " + configurations.implementation.dependencies.collect { it.toString() }.join(", ")
++}
 diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
 index 1c7a55c..a857904 100644
 --- a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
