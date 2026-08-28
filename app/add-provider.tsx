@@ -311,7 +311,7 @@ export default function AddProviderScreen() {
                     ──────────────────────────────────────────────────────────── */}
                     <KeyboardAvoidingView
                         style={styles.kavWrapper}
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         enabled={!isTV}
                     >
                         <ScrollView
