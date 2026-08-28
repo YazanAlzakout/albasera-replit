@@ -1,0 +1,47 @@
+// Adapted from androidx/media's libraries/decoder_ffmpeg module (tag 1.8.0,
+// https://github.com/androidx/media/tree/1.8.0/libraries/decoder_ffmpeg),
+// Apache License 2.0. The original build.gradle references sibling modules
+// via the androidx/media monorepo's `project(...)` helper; here we depend on
+// the equivalent published Maven artifacts instead, since this module is
+// vendored standalone into this app rather than built inside that monorepo.
+//
+// This module provides FfmpegAudioRenderer/FfmpegAudioDecoder only (the video
+// renderer from upstream is intentionally not included — we only need an MP2
+// *audio* decoder; video stays on Media3's hardware MediaCodec path).
+//
+// The native (C++/FFmpeg) side is NOT built until an actual FFmpeg source
+// checkout has been placed at src/main/jni/ffmpeg (see UPSTREAM_README.md and
+// scripts/build-ffmpeg-mp2-decoder.sh at the repo root) — until then this
+// module compiles as a Java-only library with no native code, and does
+// nothing (FfmpegLibrary.isAvailable() reports false, so
+// DefaultRenderersFactory's extension-renderer mode silently skips it).
+apply plugin: 'com.android.library'
+
+def androidxMedia3Version = "1.8.0"
+
+android {
+    namespace 'androidx.media3.decoder.ffmpeg'
+    compileSdkVersion 35
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 35
+    }
+
+    if (project.file('src/main/jni/ffmpeg').exists()) {
+        externalNativeBuild.cmake.path = 'src/main/jni/CMakeLists.txt'
+        externalNativeBuild.cmake.version = '3.21.0+'
+    }
+
+    buildFeatures {
+        buildConfig = false
+    }
+}
+
+dependencies {
+    api "androidx.media3:media3-decoder:${androidxMedia3Version}"
+    implementation "androidx.media3:media3-exoplayer:${androidxMedia3Version}"
+    implementation "androidx.media3:media3-common:${androidxMedia3Version}"
+    compileOnly "androidx.annotation:annotation:1.7.1"
+    compileOnly "org.checkerframework:checker-qual:3.42.0"
+}

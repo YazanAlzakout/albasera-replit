@@ -1,0 +1,161 @@
+name: Build FFmpeg MP2 decoder (Media3, LGPL-safe)
+
+# Manual only — this never runs on push/PR, so it can't fire against main or
+# any branch by accident. Trigger it yourself from the Actions tab once
+# you're ready (Phase 2, after reviewing this file).
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg_ref:
+        description: "FFmpeg git ref to build (must stay LGPL-safe; do not pass a ref that requires --enable-gpl/--enable-nonfree)"
+        required: false
+        default: "release/6.0"
+      ndk_version:
+        description: "Android NDK version (matches modules/decoder-ffmpeg-mp2/android/UPSTREAM_README.md)"
+        required: false
+        default: "r26b"
+      android_abi:
+        description: "Native API level for the build (must not exceed the app's minSdkVersion, currently 26; module default is 24)"
+        required: false
+        default: "24"
+
+# Least-privilege: this job only needs to read the repo and upload an
+# artifact. No contents:write, no ability to push/commit anything.
+permissions:
+  contents: read
+
+jobs:
+  build-ffmpeg-mp2:
+    name: Build libavcodec/libavutil/libswresample (mp2 decoder only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout albasera-replit (this repo, this ref only)
+        uses: actions/checkout@v4
+
+      - name: Install Android NDK ${{ inputs.ndk_version }}
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ inputs.ndk_version }}
+          local-cache: true
+
+      - name: Install FFmpeg build dependencies
+        run: sudo apt-get update && sudo apt-get install -y yasm
+
+      - name: Fetch FFmpeg (${{ inputs.ffmpeg_ref }})
+        env:
+          FFMPEG_REF: ${{ inputs.ffmpeg_ref }}
+        run: |
+          set -eu
+          git clone --depth 1 --branch "${FFMPEG_REF}" https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
+
+      - name: Link FFmpeg source into the decoder module
+        run: |
+          set -eu
+          MODULE_MAIN="modules/decoder-ffmpeg-mp2/android/src/main"
+          mkdir -p "${MODULE_MAIN}/jni"
+          ln -sfn "$(pwd)/ffmpeg-src" "${MODULE_MAIN}/jni/ffmpeg"
+
+      # Builds only armeabi-v7a and arm64-v8a (per project decision: AlBasera's
+      # real Android-phone and Android-TV-box audience is ARM; x86/x86_64 is
+      # effectively emulator-only and is intentionally NOT built here).
+      #
+      # Flags are copied verbatim from the vendored, unmodified upstream
+      # modules/decoder-ffmpeg-mp2/android/src/main/jni/build_ffmpeg.sh
+      # (androidx/media, Apache-2.0) for the armv7/arm64 blocks only — no
+      # reimplementation, no drift from the documented, reviewed script.
+      # --enable-decoder=mp2 is the only codec enabled; there is no
+      # --enable-gpl or --enable-nonfree anywhere in this file.
+      - name: Build FFmpeg (mp2 decoder only) for armeabi-v7a + arm64-v8a
+        env:
+          NDK_PATH: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_ABI: ${{ inputs.android_abi }}
+        run: |
+          set -eu
+          HOST_PLATFORM="linux-x86_64"
+          JOBS="$(nproc)"
+          ENABLED_DECODERS=(mp2)
+
+          COMMON_OPTIONS="
+              --target-os=android
+              --enable-static
+              --disable-shared
+              --disable-doc
+              --disable-programs
+              --disable-everything
+              --disable-avdevice
+              --disable-avformat
+              --disable-swscale
+              --disable-postproc
+              --disable-avfilter
+              --disable-symver
+              --enable-swresample
+              --extra-ldexeflags=-pie
+              --disable-v4l2-m2m
+              --disable-vulkan
+              "
+          for decoder in "${ENABLED_DECODERS[@]}"; do
+              COMMON_OPTIONS="${COMMON_OPTIONS} --enable-decoder=${decoder}"
+          done
+          echo "FFmpeg config (LGPL-safe check): ${COMMON_OPTIONS}" | tr -s ' '
+
+          TOOLCHAIN_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/${HOST_PLATFORM}/bin"
+          if [[ ! -d "${TOOLCHAIN_PREFIX}" ]]; then
+              echo "NDK toolchain not found at ${TOOLCHAIN_PREFIX}"
+              exit 1
+          fi
+
+          ANDROID_ABI_64BIT="$ANDROID_ABI"
+          if [[ "$ANDROID_ABI_64BIT" -lt 21 ]]; then
+              ANDROID_ABI_64BIT=21
+          fi
+
+          cd ffmpeg-src
+
+          echo "== armeabi-v7a =="
+          ./configure \
+              --libdir=android-libs/armeabi-v7a \
+              --arch=arm \
+              --cpu=armv7-a \
+              --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
+              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+              --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
+              --extra-ldflags="-Wl,--fix-cortex-a8" \
+              ${COMMON_OPTIONS}
+          make -j"$JOBS"
+          make install-libs
+          make clean
+
+          echo "== arm64-v8a =="
+          ./configure \
+              --libdir=android-libs/arm64-v8a \
+              --arch=aarch64 \
+              --cpu=armv8-a \
+              --cross-prefix="${TOOLCHAIN_PREFIX}/aarch64-linux-android${ANDROID_ABI_64BIT}-" \
+              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+              ${COMMON_OPTIONS}
+          make -j"$JOBS"
+          make install-libs
+          make clean
+
+      - name: List produced static libraries
+        run: find modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs -type f -name "*.a" -exec ls -la {} \;
+
+      # Artifact only — nothing is committed or pushed to the repo by this
+      # workflow. You download this from the Actions run page and decide
+      # yourself whether/where to commit it.
+      - name: Upload built libraries as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-mp2-decoder-libs
+          path: |
+            modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs/armeabi-v7a/*.a
+            modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs/arm64-v8a/*.a
+          if-no-files-found: error
+          retention-days: 14
