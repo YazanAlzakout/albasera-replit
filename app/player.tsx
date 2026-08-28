@@ -693,7 +693,18 @@ export default function PlayerScreen() {
                     ? (player.availableSubtitleTracks ?? configuredSubtitleTracks)
                     : (player.availableSubtitleTracks ?? []),
             );
-            setAvailableAudioTracks(player.availableAudioTracks ?? []);
+            const audioTracks = player.availableAudioTracks ?? [];
+            setAvailableAudioTracks(audioTracks);
+            // Media3 sometimes plays a stream successfully (video renders, no
+            // error ever fires) while silently dropping an audio track it
+            // can't decode (MP2 being the known case) - no PlaybackException,
+            // just no sound. A hard error is what the statusChange listener
+            // above catches; this is the "looks fine but is silently mute"
+            // case that needs its own check, right when we know playback
+            // actually succeeded.
+            if (isAndroid && !useNativeVlc && audioTracks.length === 0) {
+                fallBackToVlc();
+            }
             const contentType = type as string;
             if ((contentType === 'movie' || contentType === 'series') && !resumeAppliedRef.current) {
                 resumeAppliedRef.current = true;
@@ -707,7 +718,7 @@ export default function PlayerScreen() {
                 });
             }
         }
-    }, [configuredSubtitleTracks, isWeb, playerStatus]);
+    }, [configuredSubtitleTracks, isWeb, playerStatus, useNativeVlc, fallBackToVlc]);
 
     useFocusEffect(useCallback(() => {
         if (isTV) return undefined;
