@@ -2,6 +2,12 @@ import Hls from 'hls.js';
 import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { View } from 'react-native';
 
+/* eslint-disable no-console */
+const devLog = (...args: unknown[]) => { if (__DEV__) console.log(...args); };
+const devWarn = (...args: unknown[]) => { if (__DEV__) console.warn(...args); };
+const devError = (...args: unknown[]) => { if (__DEV__) console.error(...args); };
+/* eslint-enable no-console */
+
 function isAudioCodecSupported(codec?: string): boolean | null {
     const normalized = codec?.trim().toLowerCase();
     if (!normalized) return null;
@@ -96,7 +102,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
 
     useImperativeHandle(ref, () => ({
         play: () => {
-            videoRef.current?.play().catch(e => console.log('Autoplay blocked:', e));
+            videoRef.current?.play().catch(e => devLog('Autoplay blocked:', e));
         },
         pause: () => {
             videoRef.current?.pause();
@@ -209,7 +215,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
                 );
                 props.onTracksChange?.(subtitleTracksRef.current, tracks);
                 props.onStatusChange?.('readyToPlay');
-                video.play().catch(e => console.log('HLS Autoplay prevented:', e));
+                video.play().catch(e => devLog('HLS Autoplay prevented:', e));
             });
             hls.on(Hls.Events.ERROR, (_event, data) => {
                 if (!isCurrentSource()) return;
@@ -224,7 +230,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
                         hls.recoverMediaError();
                         return;
                     }
-                    console.error('HLS fatal playback error:', data.type, data.details);
+                    devError('HLS fatal playback error:', data.type, data.details);
                     props.onStatusChange?.('error');
                     props.onError?.();
                 }
@@ -239,7 +245,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
             const onLoaded = () => {
                 if (!isCurrentSource()) return;
                 props.onStatusChange?.('readyToPlay');
-                video.play().catch(e => console.log('Native HLS Autoplay prevented:', e));
+                video.play().catch(e => devLog('Native HLS Autoplay prevented:', e));
                 video.removeEventListener('loadedmetadata', onLoaded);
             };
             const onError = () => {
@@ -266,7 +272,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
             import('mpegts.js').then((mpegts) => {
                 if (!isCurrentSource()) return;
                 if (!mpegts.default.isSupported()) {
-                    console.warn('mpegts.js not supported, falling back to direct src');
+                    devWarn('mpegts.js not supported, falling back to direct src');
                     loadDirectSrc(url, isCurrentSource);
                     return;
                 }
@@ -297,20 +303,20 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
                 });
                 player.on(mpegts.default.Events.ERROR, (errorType: string, errorDetail: string) => {
                     if (!isCurrentSource()) return;
-                    console.error('mpegts.js Error:', errorType, errorDetail);
+                    devError('mpegts.js Error:', errorType, errorDetail);
                     props.onStatusChange?.('error');
                     props.onError?.();
                 });
                 const onCanPlay = () => {
                     if (!isCurrentSource()) return;
                     props.onStatusChange?.('readyToPlay');
-                    video.play().catch(e => console.log('mpegts Autoplay prevented:', e));
+                    video.play().catch(e => devLog('mpegts Autoplay prevented:', e));
                     video.removeEventListener('canplay', onCanPlay);
                 };
                 video.addEventListener('canplay', onCanPlay);
             }).catch((e) => {
                 if (!isCurrentSource()) return;
-                console.error('mpegts.js import failed:', e);
+                devError('mpegts.js import failed:', e);
                 loadDirectSrc(url, isCurrentSource);
             });
             return;
@@ -329,13 +335,13 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
         const onLoaded = () => {
             if (!isCurrentSource()) return;
             props.onStatusChange?.('readyToPlay');
-            video.play().catch(e => console.log('Direct Autoplay prevented:', e));
+            video.play().catch(e => devLog('Direct Autoplay prevented:', e));
             video.removeEventListener('loadedmetadata', onLoaded);
         };
         const onErr = () => {
             if (!isCurrentSource() || errorReported) return;
             errorReported = true;
-            console.error('Direct video source failed to load.');
+            devError('Direct video source failed to load.');
             cleanup();
             props.onStatusChange?.('error');
             props.onError?.();
@@ -393,12 +399,17 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
         };
     }, [props.source]);
 
+    const onPlayingChangeRef = useRef(props.onPlayingChange);
+    const onTimeUpdateRef = useRef(props.onTimeUpdate);
+    onPlayingChangeRef.current = props.onPlayingChange;
+    onTimeUpdateRef.current = props.onTimeUpdate;
+
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
-        const handlePlay = () => props.onPlayingChange?.(true);
-        const handlePause = () => props.onPlayingChange?.(false);
-        const handleTimeUpdate = () => props.onTimeUpdate?.(video.currentTime, video.duration);
+        const handlePlay = () => onPlayingChangeRef.current?.(true);
+        const handlePause = () => onPlayingChangeRef.current?.(false);
+        const handleTimeUpdate = () => onTimeUpdateRef.current?.(video.currentTime, video.duration);
         video.addEventListener('play', handlePlay);
         video.addEventListener('pause', handlePause);
         video.addEventListener('timeupdate', handleTimeUpdate);
@@ -407,7 +418,7 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
             video.removeEventListener('pause', handlePause);
             video.removeEventListener('timeupdate', handleTimeUpdate);
         };
-    }, [props]);
+    }, []);
 
     return (
         <View style={props.style}>

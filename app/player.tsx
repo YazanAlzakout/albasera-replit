@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { TVRow } from '@/components/tv/SpatialWrappers';
 import { Brand } from '@/constants/theme';
 import { useLanguage } from '@/contexts/language-context';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { watchHistoryService } from '@/services/watch-history-service';
 import { xtreamService } from '@/services/xtream-service';
 import { diagnoseNativeAudioError, getNativeMediaContentType } from '@/utils/media-codec';
@@ -36,7 +37,12 @@ const CONTROLS_TIMEOUT = 5000;
 const isTV = Platform.isTV;
 const isWeb = Platform.OS === 'web';
 const isIOS = Platform.OS === 'ios';
+const isAndroid = Platform.OS === 'android';
+type PlaybackEngine = 'media3' | 'vlc';
 const LIVE_CHANNELS_CACHE_MS = 5 * 60 * 1000;
+const CHANNEL_ROW_HEIGHT = isTV ? 62 : 54;
+const CHANNEL_ROW_GAP = 5;
+const CHANNEL_ROW_TOTAL_HEIGHT = CHANNEL_ROW_HEIGHT + CHANNEL_ROW_GAP;
 
 type LiveChannel = {
     id: string;
@@ -77,6 +83,46 @@ function formatTime(seconds: number): string {
 
 type PlayerStatus = 'idle' | 'loading' | 'readyToPlay' | 'error';
 
+// Extracted + memoized so the channel guide (which can hold hundreds of rows)
+// doesn't re-render every visible row on every player progress tick — only
+// `renderChannelItem`'s own dependencies (active channel, RTL, selection
+// handler) changing forces new rows, not every parent re-render.
+const ChannelListItem = React.memo(({
+    item, index, isActive, isRTL, onPressItem, hasTVPreferredFocus,
+}: {
+    item: LiveChannel;
+    index: number;
+    isActive: boolean;
+    isRTL: boolean;
+    onPressItem: (item: LiveChannel) => void;
+    hasTVPreferredFocus: boolean;
+}) => {
+    const handlePress = useCallback(() => onPressItem(item), [onPressItem, item]);
+
+    return (
+        <TVPressable
+            onPress={handlePress}
+            hasTVPreferredFocus={hasTVPreferredFocus}
+            focusVariant="card"
+            style={[styles.channelListItem, isActive && styles.channelListItemActive, isRTL && styles.rowRTL]}
+        >
+            <View style={[styles.channelNumber, isActive && styles.channelNumberActive]}>
+                <ThemedText style={styles.channelNumberText}>{index + 1}</ThemedText>
+            </View>
+            <View style={styles.channelListText}>
+                <ThemedText style={[styles.channelName, isRTL && styles.textRTL]} numberOfLines={1}>
+                    {item.name || `${isRTL ? 'قناة' : 'Channel'} ${index + 1}`}
+                </ThemedText>
+                <ThemedText style={[styles.channelFormat, isRTL && styles.textRTL]}>
+                    {(item.extension || 'LIVE').toUpperCase()}
+                </ThemedText>
+            </View>
+            {isActive && <Ionicons name="play-circle" size={23} color={Brand.primary} />}
+        </TVPressable>
+    );
+});
+ChannelListItem.displayName = 'ChannelListItem';
+
 export default function PlayerScreen() {
     const params = useLocalSearchParams();
     const {
@@ -110,7 +156,11 @@ export default function PlayerScreen() {
     const [seekBarNode, setSeekBarNode] = useState<number | null>(null);
 
     const isLive = type === 'live';
-    const useNativeVlc = false;
+    // Media3 (expo-video) is the default Android engine; VLC is used only as a
+    // fallback for streams Media3 can't decode (e.g. MP2 audio). See
+    // .agents/memory/mp2-audio-strategy.md for why this codec gap exists.
+    const [engine, setEngine] = useState<PlaybackEngine>('media3');
+    const useNativeVlc = isAndroid && engine === 'vlc';
     const [activeLiveChannel, setActiveLiveChannel] = useState({
         id: initialStreamId,
         name: initialName,
@@ -140,6 +190,7 @@ export default function PlayerScreen() {
     const [showVolumeSlider, setShowVolumeSlider] = useState(false);
     const [showChannelGuide, setShowChannelGuide] = useState(false);
     const [channelSearch, setChannelSearch] = useState('');
+    const [showAllChannelsInGuide, setShowAllChannelsInGuide] = useState(false);
     const [selectedSubtitleTrack, setSelectedSubtitleTrack] = useState<MediaTrack | null>(null);
     const [selectedAudioTrack, setSelectedAudioTrack] = useState<MediaTrack | null>(null);
     const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<MediaTrack[]>([]);
@@ -163,6 +214,8 @@ export default function PlayerScreen() {
     const webPlayerRef = useRef<WebVideoPlayerRef>(null);
     const nativeLivePlayerRef = useRef<NativeLivePlayerRef>(null);
     const [vlcReloadKey, setVlcReloadKey] = useState(0);
+    const vlcUiUpdateRef = useRef(0);
+    const webUiUpdateRef = useRef(0);
 
     useEffect(() => {
         return () => {
@@ -218,7 +271,7 @@ export default function PlayerScreen() {
 
     const videoUrl = typeof videoSource === 'string' ? videoSource : (videoSource?.uri ?? '');
 
-    const expoPlayer = useVideoPlayer(useNativeVlc ? null : videoSource, (p) => {
+    const expoPlayer = useVideoPlayer((useNativeVlc || isWeb) ? null : videoSource, (p) => {
         if (!isWeb && !useNativeVlc) {
             p.loop = false;
             p.timeUpdateEventInterval = 1;
@@ -237,7 +290,10 @@ export default function PlayerScreen() {
             ? nativeLivePlayerRef.current?.pause()
             : isWeb ? webPlayerRef.current?.pause() : expoPlayer.pause(),
         seekBy: (secs: number) => {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                nativeLivePlayerRef.current?.seekBy(secs);
+                return;
+            }
             return isWeb ? webPlayerRef.current?.seekBy(secs) : expoPlayer.seekBy(secs);
         },
         replace: (url: string) => {
@@ -251,36 +307,53 @@ export default function PlayerScreen() {
                 expoPlayer.replace(url);
             }
         },
-        get duration() { return useNativeVlc ? 0 : isWeb ? (webPlayerRef.current?.duration || 0) : expoPlayer.duration; },
-        get currentTime() { return useNativeVlc ? 0 : isWeb ? (webPlayerRef.current?.currentTime || 0) : expoPlayer.currentTime; },
+        get duration() { return useNativeVlc ? duration : isWeb ? (webPlayerRef.current?.duration || 0) : expoPlayer.duration; },
+        get currentTime() { return useNativeVlc ? currentTime : isWeb ? (webPlayerRef.current?.currentTime || 0) : expoPlayer.currentTime; },
         set currentTime(v) {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                nativeLivePlayerRef.current?.seekTo(v);
+                setCurrentTime(v);
+                progressRef.current.currentTime = v;
+                return;
+            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.currentTime = v; } else expoPlayer.currentTime = v;
         },
         get playing() { return useNativeVlc ? playing : isWeb ? playing : expoPlayer.playing; },
-        get playbackRate() { return useNativeVlc ? 1 : isWeb ? (webPlayerRef.current?.playbackRate || 1) : expoPlayer.playbackRate; },
+        get playbackRate() { return useNativeVlc ? playbackRate : isWeb ? (webPlayerRef.current?.playbackRate || 1) : expoPlayer.playbackRate; },
         set playbackRate(v) {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                setPlaybackRate(v);
+                return;
+            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.playbackRate = v; } else expoPlayer.playbackRate = v;
         },
         get volume() { return useNativeVlc ? volume : isWeb ? (webPlayerRef.current?.volume ?? 1) : (expoPlayer as any).volume ?? 1; },
         set volume(v) {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                setVolume(v);
+                return;
+            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.volume = v; } else (expoPlayer as any).volume = v;
         },
-        get subtitleTrack() { return useNativeVlc ? null : isWeb ? webPlayerRef.current?.subtitleTrack : (expoPlayer as any).subtitleTrack; },
+        get subtitleTrack() { return useNativeVlc ? selectedSubtitleTrack : isWeb ? webPlayerRef.current?.subtitleTrack : (expoPlayer as any).subtitleTrack; },
         set subtitleTrack(v) {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                setSelectedSubtitleTrack(v);
+                return;
+            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.subtitleTrack = v; } else (expoPlayer as any).subtitleTrack = v;
         },
-        get availableSubtitleTracks() { return useNativeVlc ? [] : isWeb ? (webPlayerRef.current?.availableSubtitleTracks || []) : ((expoPlayer as any).availableSubtitleTracks || []); },
+        get availableSubtitleTracks() { return useNativeVlc ? availableSubtitleTracks : isWeb ? (webPlayerRef.current?.availableSubtitleTracks || []) : ((expoPlayer as any).availableSubtitleTracks || []); },
         get audioTrack() { return useNativeVlc ? selectedAudioTrack : isWeb ? webPlayerRef.current?.audioTrack : (expoPlayer as any).audioTrack; },
         set audioTrack(v) {
-            if (useNativeVlc) return;
+            if (useNativeVlc) {
+                setSelectedAudioTrack(v);
+                return;
+            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.audioTrack = v; } else (expoPlayer as any).audioTrack = v;
         },
         get availableAudioTracks() { return useNativeVlc ? availableAudioTracks : isWeb ? (webPlayerRef.current?.availableAudioTracks || []) : ((expoPlayer as any).availableAudioTracks || []); },
-    }), [availableAudioTracks, expoPlayer, isWeb, playing, selectedAudioTrack, useNativeVlc, volume]);
+    }), [availableAudioTracks, availableSubtitleTracks, currentTime, duration, expoPlayer, isWeb, playbackRate, playing, selectedAudioTrack, selectedSubtitleTrack, useNativeVlc, volume]);
 
     const animateControls = useCallback((show: boolean) => {
         showControlsRef.current = show;
@@ -348,6 +421,7 @@ export default function PlayerScreen() {
         fallbackIndexRef.current = 0;
         setFallbackUrls(urls.length > 0 ? urls : [nextUrl]);
         setActiveLiveChannel(nextChannel);
+        setEngine('media3');
         setAudioDiagnostic(null);
         setAvailableAudioTracks([]);
         setSelectedAudioTrack(null);
@@ -361,13 +435,20 @@ export default function PlayerScreen() {
         startControlsTimer();
     }, [activeLiveChannel.id, isLive, startControlsTimer]);
 
+    // O(1) id -> index lookup instead of scanning the (potentially thousands-long)
+    // channel list on every previous/next-channel button press.
+    const liveChannelIndexById = useMemo(() => {
+        const map = new Map<string, number>();
+        liveChannels.forEach((channel, idx) => map.set(channel.id, idx));
+        return map;
+    }, [liveChannels]);
+
     const changeLiveChannel = useCallback((direction: -1 | 1) => {
         if (!isLive || liveChannels.length < 2) return;
-        const currentIndex = liveChannels.findIndex((channel) => channel.id === activeLiveChannel.id);
-        const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+        const baseIndex = liveChannelIndexById.get(activeLiveChannel.id) ?? 0;
         const nextIndex = (baseIndex + direction + liveChannels.length) % liveChannels.length;
         selectLiveChannel(liveChannels[nextIndex]);
-    }, [activeLiveChannel.id, isLive, liveChannels, selectLiveChannel]);
+    }, [activeLiveChannel.id, isLive, liveChannels, liveChannelIndexById, selectLiveChannel]);
 
     const handleTvSeekFocusChange = useCallback((focused: boolean) => {
         tvSeekFocusedRef.current = focused;
@@ -503,22 +584,46 @@ export default function PlayerScreen() {
         startControlsTimer();
     }, [fallbackUrls.length, isLive, startControlsTimer, tryNextFallback]);
 
+    // Media3 can't decode every codec IPTV providers use (MP2 audio being the
+    // known case — see .agents/memory/mp2-audio-strategy.md). When it can't
+    // play a stream, drop to VLC for that stream instead of surfacing an error.
+    const fallBackToVlc = useCallback(() => {
+        setAvailableAudioTracks([]);
+        setSelectedAudioTrack(null);
+        setAudioDiagnostic(null);
+        setPlayerStatus('loading');
+        setEngine('vlc');
+    }, []);
+
     useEffect(() => {
         if (isWeb || useNativeVlc) return;
         const sub = expoPlayer.addListener('statusChange', ({ status, error }) => {
-            if (status === 'error' && isLive && fallbackIndexRef.current < fallbackUrls.length - 1) {
-                const didFallback = tryNextFallback();
-                if (didFallback) return;
+            if (status !== 'error') {
+                setPlayerStatus(status as PlayerStatus);
+                return;
             }
-            if (status === 'error') {
-                const audioError = diagnoseNativeAudioError(error?.message);
-                if (audioError) setAudioDiagnostic(audioError);
+
+            const audioError = diagnoseNativeAudioError(error?.message);
+            const isCodecUnsupported = audioError?.status === 'unsupported';
+
+            // A different URL for the same broadcast still has the same audio
+            // codec, so URL-cycling can't fix a confirmed codec error — go
+            // straight to VLC. Otherwise, try the remaining fallback URLs first.
+            if (isAndroid && !isCodecUnsupported && isLive && fallbackIndexRef.current < fallbackUrls.length - 1) {
+                if (tryNextFallback()) return;
             }
-            setPlayerStatus(status as PlayerStatus);
+
+            if (isAndroid) {
+                fallBackToVlc();
+                return;
+            }
+
+            if (audioError) setAudioDiagnostic(audioError);
+            setPlayerStatus('error');
         });
         setPlayerStatus(expoPlayer.status as PlayerStatus);
-        return () => sub.remove();
-    }, [expoPlayer, tryNextFallback, useNativeVlc]);
+        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
+    }, [expoPlayer, fallBackToVlc, fallbackUrls.length, isLive, tryNextFallback, useNativeVlc]);
 
     useEffect(() => {
         if (isWeb || useNativeVlc) return;
@@ -526,7 +631,7 @@ export default function PlayerScreen() {
             setPlaying(isPlaying);
         });
         setPlaying(expoPlayer.playing);
-        return () => sub.remove();
+        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
     }, [expoPlayer, useNativeVlc]);
 
     useEffect(() => {
@@ -550,8 +655,8 @@ export default function PlayerScreen() {
         });
         updateAudioTracks(expoPlayer.availableAudioTracks);
         return () => {
-            tracksSub.remove();
-            sourceSub.remove();
+            try { tracksSub.remove(); } catch { /* released by an engine fallback flip */ }
+            try { sourceSub.remove(); } catch { /* released by an engine fallback flip */ }
         };
     }, [expoPlayer, useNativeVlc]);
 
@@ -559,7 +664,7 @@ export default function PlayerScreen() {
         if (isWeb || useNativeVlc) return;
 
         let lastUIUpdate = 0;
-        const TV_UI_INTERVAL = isTV ? 2000 : 0;
+        const TV_UI_INTERVAL = isTV ? 2000 : 200;
 
         const sub = expoPlayer.addListener('timeUpdate', ({ currentTime: ct }) => {
             const d = expoPlayer.duration;
@@ -568,14 +673,14 @@ export default function PlayerScreen() {
             progressRef.current = { currentTime: ct, duration: Number.isFinite(d) ? d : 0 };
 
             if (!slidingRef.current && !isScrubbingRef.current) {
-                if (TV_UI_INTERVAL === 0 || now - lastUIUpdate >= TV_UI_INTERVAL) {
+                if (now - lastUIUpdate >= TV_UI_INTERVAL) {
                     lastUIUpdate = now;
                     setCurrentTime(ct);
                     if (Number.isFinite(d) && d > 0) setDuration(d);
                 }
             }
         });
-        return () => sub.remove();
+        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
     }, [expoPlayer, useNativeVlc]);
 
     useEffect(() => {
@@ -681,6 +786,9 @@ export default function PlayerScreen() {
             setPlayerStatus('loading');
             if (isWeb) {
                 webPlayerRef.current?.replace(videoUrl);
+            } else if (useNativeVlc) {
+                setWebSourceUrl(videoUrl);
+                setVlcReloadKey((value) => value + 1);
             } else {
                 const source = buildNativeSource(videoUrl);
                 if (typeof (expoPlayer as any).replaceAsync === 'function') {
@@ -778,11 +886,43 @@ export default function PlayerScreen() {
 
     const isLoading = playerStatus === 'loading';
     const isError = playerStatus === 'error';
+    const debouncedChannelSearch = useDebouncedValue(channelSearch, 200);
+
+    // Guide defaults to the currently-playing channel's category — with
+    // thousands of live channels on some providers, listing everything made
+    // the guide (and scrolling to the current channel within it) very slow.
+    const activeChannelCategoryId = useMemo(() => {
+        const idx = liveChannelIndexById.get(activeLiveChannel.id);
+        return idx !== undefined ? liveChannels[idx]?.categoryId : undefined;
+    }, [liveChannelIndexById, liveChannels, activeLiveChannel.id]);
+
+    const guideBaseChannels = useMemo(() => {
+        if (showAllChannelsInGuide || !activeChannelCategoryId) return liveChannels;
+        return liveChannels.filter((channel) => channel.categoryId === activeChannelCategoryId);
+    }, [liveChannels, showAllChannelsInGuide, activeChannelCategoryId]);
+
     const filteredLiveChannels = useMemo(() => {
-        const query = channelSearch.trim().toLocaleLowerCase();
-        if (!query) return liveChannels;
-        return liveChannels.filter((channel) => channel.name.toLocaleLowerCase().includes(query));
-    }, [channelSearch, liveChannels]);
+        const query = debouncedChannelSearch.trim().toLocaleLowerCase();
+        if (!query) return guideBaseChannels;
+        return guideBaseChannels.filter((channel) => channel.name.toLocaleLowerCase().includes(query));
+    }, [debouncedChannelSearch, guideBaseChannels]);
+
+    const channelGetItemLayout = useCallback((_data: unknown, index: number) => ({
+        length: CHANNEL_ROW_TOTAL_HEIGHT,
+        offset: CHANNEL_ROW_TOTAL_HEIGHT * index,
+        index,
+    }), []);
+
+    const renderChannelItem = useCallback(({ item, index }: { item: LiveChannel; index: number }) => (
+        <ChannelListItem
+            item={item}
+            index={index}
+            isActive={item.id === activeLiveChannel.id}
+            isRTL={isRTL}
+            onPressItem={selectLiveChannel}
+            hasTVPreferredFocus={isTV && item.id === activeLiveChannel.id}
+        />
+    ), [activeLiveChannel.id, isRTL, selectLiveChannel]);
 
     const scrollToCurrentChannel = useCallback(() => {
         if (!showChannelGuide) return;
@@ -798,12 +938,17 @@ export default function PlayerScreen() {
 
     useEffect(() => {
         if (!showChannelGuide) return;
+        setShowAllChannelsInGuide(false);
         if (channelScrollRetryRef.current) clearTimeout(channelScrollRetryRef.current);
         channelScrollRetryRef.current = setTimeout(scrollToCurrentChannel, 0);
         return () => {
             if (channelScrollRetryRef.current) clearTimeout(channelScrollRetryRef.current);
         };
-    }, [scrollToCurrentChannel]);
+        // Intentionally re-runs only when the guide opens or the channel list itself
+        // (re)loads — not on every keystroke/category-toggle, which would otherwise
+        // keep yanking the user's scroll position back to the current channel.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showChannelGuide, liveChannels]);
 
     const speedMenuItems = useMemo(() => SPEED_OPTIONS.map((rate) => (
         <TVPressable
@@ -843,9 +988,16 @@ export default function PlayerScreen() {
                     }}
                     onPlayingChange={(isPlaying) => setPlaying(isPlaying)}
                     onTimeUpdate={(c, d) => {
-                        if (!slidingRef.current && !isScrubbingRef.current) setCurrentTime(c);
-                        if (Number.isFinite(d) && d > 0) setDuration(d);
                         progressRef.current = { currentTime: c, duration: Number.isFinite(d) ? d : 0 };
+                        if (!slidingRef.current && !isScrubbingRef.current) {
+                            const now = Date.now();
+                            const webUiInterval = isTV ? 2000 : 200;
+                            if (now - webUiUpdateRef.current >= webUiInterval) {
+                                webUiUpdateRef.current = now;
+                                setCurrentTime(c);
+                                if (Number.isFinite(d) && d > 0) setDuration(d);
+                            }
+                        }
                     }}
                     onTracksChange={(subtitles, audio) => {
                         setAvailableSubtitleTracks(subtitles);
@@ -863,7 +1015,9 @@ export default function PlayerScreen() {
                     ref={nativeLivePlayerRef}
                     source={webSourceUrl || videoUrl}
                     volume={volume}
+                    playbackRate={playbackRate}
                     selectedAudioTrackId={selectedAudioTrack?.id}
+                    selectedSubtitleTrackId={selectedSubtitleTrack?.id}
                     reloadKey={vlcReloadKey}
                     onLoading={() => {
                         setPlayerStatus((status) => status === 'readyToPlay' ? status : 'loading');
@@ -878,9 +1032,26 @@ export default function PlayerScreen() {
                         setPlaying(false);
                         if (!tryNextFallback()) setPlayerStatus('error');
                     }}
+                    onProgress={(ct, d) => {
+                        progressRef.current = { currentTime: ct, duration: Number.isFinite(d) ? d : 0 };
+                        if (!slidingRef.current && !isScrubbingRef.current) {
+                            const now = Date.now();
+                            const tvUiInterval = isTV ? 2000 : 200;
+                            if (now - vlcUiUpdateRef.current >= tvUiInterval) {
+                                vlcUiUpdateRef.current = now;
+                                setCurrentTime(ct);
+                                if (Number.isFinite(d) && d > 0) setDuration(d);
+                            } else if (Number.isFinite(d) && d > 0 && duration <= 0) {
+                                setDuration(d);
+                            }
+                        }
+                    }}
                     onAudioTracks={(tracks) => {
                         setAvailableAudioTracks(tracks);
                         setAudioDiagnostic(tracks.length > 0 ? null : { status: 'missing' });
+                    }}
+                    onSubtitleTracks={(tracks) => {
+                        setAvailableSubtitleTracks(tracks);
                     }}
                 />
             ) : (
@@ -1257,6 +1428,7 @@ export default function PlayerScreen() {
 
                         {!isTV && showVolumeSlider && (
                             <View style={[styles.volumeContainer, isRTL && styles.volumeContainerRTL]}>
+                                <ThemedText style={styles.volumePercent}>{Math.round(volume * 100)}%</ThemedText>
                                 <Ionicons name="volume-high" size={14} color="rgba(255,255,255,0.6)" />
                                 <View style={styles.volumeSliderWrap}>
                                     <Slider
@@ -1314,6 +1486,24 @@ export default function PlayerScreen() {
                             />
                         </View>
                     )}
+                    {!!activeChannelCategoryId && (
+                        <TVPressable
+                            style={[styles.channelGuideScopeToggle, isRTL && styles.rowRTL]}
+                            onPress={() => setShowAllChannelsInGuide((v) => !v)}
+                            focusVariant="control"
+                        >
+                            <Ionicons
+                                name={showAllChannelsInGuide ? 'albums-outline' : 'list-outline'}
+                                size={14}
+                                color={Brand.primary}
+                            />
+                            <ThemedText style={styles.channelGuideScopeToggleText}>
+                                {showAllChannelsInGuide
+                                    ? (isRTL ? 'عرض هذا التصنيف فقط' : 'Show this category only')
+                                    : (isRTL ? 'عرض كل القنوات' : 'Show all channels')}
+                            </ThemedText>
+                        </TVPressable>
+                    )}
                     <FlatList
                         ref={channelListRef}
                         data={filteredLiveChannels}
@@ -1322,6 +1512,7 @@ export default function PlayerScreen() {
                         windowSize={7}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={styles.channelListContent}
+                        getItemLayout={channelGetItemLayout}
                         onScrollToIndexFailed={({ index }) => {
                             channelScrollRetryRef.current = setTimeout(() => {
                                 channelListRef.current?.scrollToIndex({
@@ -1331,30 +1522,7 @@ export default function PlayerScreen() {
                                 });
                             }, 80);
                         }}
-                        renderItem={({ item, index }) => {
-                            const active = item.id === activeLiveChannel.id;
-                            return (
-                                <TVPressable
-                                    onPress={() => selectLiveChannel(item)}
-                                    hasTVPreferredFocus={isTV && active}
-                                    focusVariant="card"
-                                    style={[styles.channelListItem, active && styles.channelListItemActive, isRTL && styles.rowRTL]}
-                                >
-                                    <View style={[styles.channelNumber, active && styles.channelNumberActive]}>
-                                        <ThemedText style={styles.channelNumberText}>{index + 1}</ThemedText>
-                                    </View>
-                                    <View style={styles.channelListText}>
-                                        <ThemedText style={[styles.channelName, isRTL && styles.textRTL]} numberOfLines={1}>
-                                            {item.name || `${isRTL ? 'قناة' : 'Channel'} ${index + 1}`}
-                                        </ThemedText>
-                                        <ThemedText style={[styles.channelFormat, isRTL && styles.textRTL]}>
-                                            {(item.extension || 'LIVE').toUpperCase()}
-                                        </ThemedText>
-                                    </View>
-                                    {active && <Ionicons name="play-circle" size={23} color={Brand.primary} />}
-                                </TVPressable>
-                            );
-                        }}
+                        renderItem={renderChannelItem}
                     />
                 </View>
             )}
@@ -1460,6 +1628,8 @@ const styles = StyleSheet.create({
     channelGuideClose: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
     channelSearch: { marginHorizontal: 12, marginBottom: 10, height: 42, paddingHorizontal: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', alignItems: 'center', gap: 8 },
     channelSearchInput: { flex: 1, height: '100%', color: '#fff', fontSize: 14 },
+    channelGuideScopeToggle: { marginHorizontal: 12, marginBottom: 10, alignSelf: 'flex-start', paddingHorizontal: 10, height: 30, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', alignItems: 'center', gap: 6 },
+    channelGuideScopeToggleText: { color: Brand.primary, fontSize: 12, fontWeight: '600' },
     channelListContent: { paddingHorizontal: 10, paddingBottom: 24 },
     channelListItem: { minHeight: isTV ? 62 : 54, borderRadius: 12, paddingHorizontal: 10, marginBottom: 5, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: 'transparent' },
     channelListItemActive: { backgroundColor: 'rgba(229,9,20,0.15)', borderColor: 'rgba(229,9,20,0.65)' },
@@ -1517,6 +1687,7 @@ const styles = StyleSheet.create({
     audioMenuCard: { left: 170 },
     volumeContainer: { position: 'absolute', bottom: isIOS ? 70 : 66, right: 20, backgroundColor: 'rgba(15,15,25,0.96)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, flexDirection: 'column', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', shadowColor: '#000', shadowOpacity: 0.6, shadowRadius: 24, shadowOffset: { width: 0, height: -4 }, elevation: 16, zIndex: 10 },
     volumeContainerRTL: { right: undefined, left: 20 },
+    volumePercent: { color: '#fff', fontSize: 11, fontWeight: '700' },
     volumeSliderWrap: { height: 120, width: 34, justifyContent: 'center', alignItems: 'center' },
     volumeSlider: { width: 120, height: 34, transform: [{ rotate: '-90deg' }] },
     menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12 },
