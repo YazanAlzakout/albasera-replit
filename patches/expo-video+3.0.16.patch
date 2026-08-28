@@ -1,8 +1,14 @@
 diff --git a/node_modules/expo-video/android/build.gradle b/node_modules/expo-video/android/build.gradle
-index f17d2d4..eb900e6 100644
+index f17d2d4..11d6f55 100644
 --- a/node_modules/expo-video/android/build.gradle
 +++ b/node_modules/expo-video/android/build.gradle
-@@ -26,7 +26,19 @@ dependencies {
+@@ -1,3 +1,5 @@
++println "[expo-video] TOP OF FILE - build.gradle is being evaluated"
++
+ plugins {
+   id 'com.android.library'
+   id 'expo-module-gradle-plugin'
+@@ -26,7 +28,19 @@ dependencies {
    implementation "androidx.media3:media3-ui:${androidxMedia3Version}"
    implementation "androidx.media3:media3-datasource-okhttp:${androidxMedia3Version}"
  
