@@ -63,7 +63,12 @@ jobs:
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: ${{ env.NDK_VERSION }}
-          local-cache: true
+          # local-cache was true; disabled after a run failed at FFmpeg's
+          # configure C-compiler-test step ("unable to create an executable
+          # file") with the exact same build script that succeeded on a
+          # previous run - a stale/corrupt cached NDK extraction is the
+          # leading suspect, since nothing else changed between the two runs.
+          local-cache: false
 
       - name: Install FFmpeg build dependencies
         run: sudo apt-get update && sudo apt-get install -y yasm
@@ -96,6 +101,11 @@ jobs:
           # ANDROID_ABI comes from the workflow-level env: block above.
         run: |
           set -eu
+          # FFmpeg's configure only reports "C compiler test failed" plus a
+          # pointer at ffbuild/config.log for the real reason - dump it
+          # automatically on any failure in this step so the cause shows up
+          # directly in the log instead of needing another round-trip.
+          trap 'echo "=== ffbuild/config.log (tail) ==="; tail -n 100 ffbuild/config.log 2>/dev/null || tail -n 100 ffmpeg-src/ffbuild/config.log 2>/dev/null || echo "(no config.log found)"' ERR
           HOST_PLATFORM="linux-x86_64"
           JOBS="$(nproc)"
           ENABLED_DECODERS=(mp2)
