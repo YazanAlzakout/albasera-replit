@@ -6,9 +6,16 @@ name: Build FFmpeg MP2 decoder (Media3, LGPL-safe)
 #
 # NOTE: workflow_dispatch was deliberately dropped. GitHub only allows manually
 # dispatching a workflow if its YAML file exists on the repository's default
-# branch (main here) — confirmed via the Actions API, not assumed. Since this
-# workflow must stay off main until it's reviewed and proven, `push` is the
-# only trigger that actually works from a non-default branch.
+# branch (main here) — confirmed via the Actions API. Since this workflow must
+# stay off main until reviewed/proven, `push` is the only trigger that
+# actually works from a non-default branch.
+#
+# RECURSIVE-LOOP SAFETY: the "commit built libraries" step below pushes to the
+# same branch/paths this workflow listens on. That push's commit message
+# includes "[skip ci]" — GitHub's built-in, platform-level convention that
+# suppresses *any* workflow run for that commit, evaluated before path/branch
+# filters. This is the sole (and sufficient) loop-prevention mechanism; do not
+# remove "[skip ci]" from that commit message.
 on:
   push:
     branches:
@@ -24,11 +31,16 @@ env:
   FFMPEG_REF: "release/6.0"
   NDK_VERSION: "r26b"
   ANDROID_ABI: "24"
+  TARGET_BRANCH: "mp2-vlc-support"
 
-# Least-privilege: this job only needs to read the repo and upload an
-# artifact. No contents:write, no ability to push/commit anything.
+# contents:write is required so the job can commit the built libraries back to
+# mp2-vlc-support (see step below). This does NOT grant access to other
+# branches: the trigger's `branches:` filter means this job only ever runs
+# checked out at mp2-vlc-support, and the commit step below hardcodes that
+# branch name (never derives it from user-controllable input) plus asserts
+# github.ref_name matches it before pushing, as defense in depth.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-ffmpeg-mp2:
@@ -37,6 +49,8 @@ jobs:
     steps:
       - name: Checkout albasera-replit (this repo, this ref only)
         uses: actions/checkout@v4
+        with:
+          ref: mp2-vlc-support
 
       - name: Install Android NDK ${{ env.NDK_VERSION }}
         id: setup-ndk
@@ -53,7 +67,7 @@ jobs:
           set -eu
           git clone --depth 1 --branch "${FFMPEG_REF}" https://git.ffmpeg.org/ffmpeg.git ffmpeg-src
 
-      - name: Link FFmpeg source into the decoder module
+      - name: Link FFmpeg source into the decoder module (build-time only)
         run: |
           set -eu
           MODULE_MAIN="modules/decoder-ffmpeg-mp2/android/src/main"
@@ -148,12 +162,48 @@ jobs:
           make install-libs
           make clean
 
-      - name: List produced static libraries
-        run: find modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs -type f -name "*.a" -exec ls -la {} \;
+      # ffmpeg_jni.cc #includes libavcodec/avcodec.h, libavutil/*.h, and
+      # libswresample/swresample.h, which themselves transitively include many
+      # other headers within those same three directories (including
+      # configure-generated ones like libavutil/avconfig.h). Rather than
+      # hand-tracing that transitive closure (fragile across FFmpeg version
+      # bumps), copy every .h in these three lib dirs — real files, not the
+      # CI-only symlink above, since EAS checks out a fresh clone that won't
+      # have ffmpeg-src at all. This does NOT vendor FFmpeg's .c sources,
+      # build system, docs, or tests — only public headers + the compiled
+      # static libs actually needed to link libffmpegJNI.so.
+      - name: Vendor FFmpeg headers + built libraries into the module (real files)
+        run: |
+          set -eu
+          DEST="modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg"
+          rm -f "${DEST}"   # remove the build-time symlink
+          mkdir -p "${DEST}"
 
-      # Artifact only — nothing is committed or pushed to the repo by this
-      # workflow. You download this from the Actions run page and decide
-      # yourself whether/where to commit it.
+          for dir in libavutil libavcodec libswresample; do
+            ( cd ffmpeg-src && find "${dir}" -name "*.h" ) | while read -r rel; do
+              mkdir -p "${DEST}/$(dirname "${rel}")"
+              cp "ffmpeg-src/${rel}" "${DEST}/${rel}"
+            done
+          done
+
+          for abi in armeabi-v7a arm64-v8a; do
+            mkdir -p "${DEST}/android-libs/${abi}"
+            cp ffmpeg-src/android-libs/${abi}/*.a "${DEST}/android-libs/${abi}/"
+          done
+
+      - name: List vendored headers + libraries
+        run: |
+          echo "=== Static libraries ==="
+          find modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs -type f -name "*.a" -exec ls -la {} \;
+          echo "=== Header count ==="
+          find modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg -type f -name "*.h" | wc -l
+          echo "=== Total vendored size ==="
+          du -sh modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg
+
+      # Artifact stays scoped to just the .a files (the originally agreed
+      # deliverable) even though the commit step below also vendors headers —
+      # the commit is now the primary integration path; this artifact remains
+      # as a secondary, inspectable copy of just the compiled libraries.
       - name: Upload built libraries as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -163,3 +213,31 @@ jobs:
             modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg/android-libs/arm64-v8a/*.a
           if-no-files-found: error
           retention-days: 14
+
+      # Commits real files (never a symlink) so a fresh checkout on any other
+      # machine (EAS's build servers) has everything CMake needs, with no
+      # manual copy/extract step required from anyone. [skip ci] in the
+      # message is load-bearing — see the loop-prevention note at the top of
+      # this file.
+      - name: Commit vendored FFmpeg headers + libraries to mp2-vlc-support
+        run: |
+          set -eu
+          if [ "${{ github.ref_name }}" != "${TARGET_BRANCH}" ]; then
+            echo "Refusing to commit: ref_name is '${{ github.ref_name }}', expected '${TARGET_BRANCH}'."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit — vendored output is identical to what's already committed."
+            exit 0
+          fi
+
+          git commit -m "Vendor built FFmpeg MP2 decoder libraries [skip ci]" \
+                      -m "Auto-committed by .github/workflows/build-ffmpeg-mp2-decoder.yml after a successful build (FFmpeg ${FFMPEG_REF}, NDK ${NDK_VERSION}, ABIs: armeabi-v7a + arm64-v8a). [skip ci] prevents this push from re-triggering this same workflow."
+
+          git push origin "HEAD:${TARGET_BRANCH}"
