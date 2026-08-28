@@ -119,6 +119,14 @@ module.exports = {
 
             "expo-localization",
 
+            // Wires modules/decoder-ffmpeg-mp2 (a from-scratch, LGPL-safe FFmpeg
+            // build with only the MP2 decoder enabled, Apache-2.0 wrapper code
+            // vendored from androidx/media) into Media3 as an extension audio
+            // renderer, so MP2 live channels decode natively instead of falling
+            // back to VLC. See patches/expo-video+*.patch for the two lines this
+            // depends on (build.gradle dependency + setExtensionRendererMode).
+            "./plugins/withDecoderFfmpegMp2",
+
             ...(isTV ? ["@react-native-tvos/config-tv"] : [])
         ],
 

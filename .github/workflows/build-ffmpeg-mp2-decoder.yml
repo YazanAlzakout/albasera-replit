@@ -1,5 +1,11 @@
 name: Build FFmpeg MP2 decoder (Media3, LGPL-safe)
 
+# Re-activated: confirmed via a real IPTV provider's stream (KU: NRT 3 HD -
+# HEVC video + MPEG-1 Audio Layer II) that MP2 is genuinely absent from stock
+# Android's MediaCodec, and that a competing player app plays the same stream
+# with audio at a fraction of this app's size - strong evidence a small,
+# MP2-only decoder (this module) is the right fix, not VLC-for-everything.
+#
 # Push-triggered, scoped to mp2-vlc-support only, and further scoped to only
 # fire when this workflow file or the vendored module actually change — not
 # on every unrelated commit to that branch.
