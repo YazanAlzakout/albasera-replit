@@ -15,6 +15,7 @@ import { useAppTheme } from '@/contexts/theme-context';
 import { useAuth } from '@/hooks/use-auth';
 import { useLegalAcceptance } from '@/hooks/use-legal-acceptance';
 import { type Provider, useProviders } from '@/hooks/use-providers';
+import { XtreamServiceError } from '@/services/xtream-service';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -287,9 +288,7 @@ function TVContentPanel({
     isLegalAccepted: boolean;
     legalLoading: boolean;
 }) {
-    // TV UX: keep the button focusable/clickable when a provider is selected.
-    // Legal gating is enforced inside handleLogin via alert + /legal navigation.
-    const loginDisabled = isLoggingIn || !activeProvider;
+    const loginDisabled = isLoggingIn || !activeProvider || !isLegalAccepted || legalLoading;
 
     return (
         <Animated.View
@@ -464,8 +463,9 @@ export default function LoginScreen() {
                 activeProvider.password,
                 activeProvider.type || 'xtream',
             );
-        } catch {
-            Alert.alert(t.login.connectionError, t.login.connectionErrorMsg);
+        } catch (error) {
+            const message = error instanceof XtreamServiceError ? error.message : t.login.connectionErrorMsg;
+            Alert.alert(t.login.connectionError, message);
         }
     };
 

@@ -89,6 +89,7 @@ class XtreamService {
     private credentials = { username: '', password: '' };
     private apiPath: string = 'player_api.php';
     private streamCache = new Map<string, { expiresAt: number; request: Promise<XtreamStream[]> }>();
+    private infoCache = new Map<string, { expiresAt: number; request: Promise<any> }>();
 
     initialize(url: string, username: string, password: string, options?: { apiPath?: string }) {
         // Ensure url has protocol and no trailing slash
@@ -110,6 +111,7 @@ class XtreamService {
         this.credentials = { username, password };
         this.apiPath = options?.apiPath ?? 'player_api.php';
         this.streamCache.clear();
+        this.infoCache.clear();
 
         const isWeb = Platform.OS === 'web';
         const headers: Record<string, string> = {
@@ -184,19 +186,39 @@ class XtreamService {
     }
 
     async getVodInfo(vodId: number): Promise<any> {
-        if (!this.axiosInstance) throw new Error('XtreamService not initialized');
-        const response = await this.axiosInstance.get('', {
-            params: { action: 'get_vod_info', vod_id: vodId },
-        });
-        return response.data;
+        const client = this.getClient();
+        const cacheKey = `vod:${vodId}`;
+        const cached = this.infoCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.request;
+        }
+
+        const request = client.get<unknown>('', { params: { action: 'get_vod_info', vod_id: vodId } })
+            .then((response) => response.data)
+            .catch((error: unknown) => {
+                this.infoCache.delete(cacheKey);
+                throw this.normalizeError(error, 'Unable to load movie details.');
+            });
+        this.infoCache.set(cacheKey, { expiresAt: Date.now() + 60_000, request });
+        return request;
     }
 
     async getSeriesInfo(seriesId: number): Promise<any> {
-        if (!this.axiosInstance) throw new Error('XtreamService not initialized');
-        const response = await this.axiosInstance.get('', {
-            params: { action: 'get_series_info', series_id: seriesId },
-        });
-        return response.data;
+        const client = this.getClient();
+        const cacheKey = `series:${seriesId}`;
+        const cached = this.infoCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.request;
+        }
+
+        const request = client.get<unknown>('', { params: { action: 'get_series_info', series_id: seriesId } })
+            .then((response) => response.data)
+            .catch((error: unknown) => {
+                this.infoCache.delete(cacheKey);
+                throw this.normalizeError(error, 'Unable to load series details.');
+            });
+        this.infoCache.set(cacheKey, { expiresAt: Date.now() + 60_000, request });
+        return request;
     }
 
     getStreamUrl(streamId: number, extension: string = '', type: 'live' | 'movie' | 'series' = 'live'): string {

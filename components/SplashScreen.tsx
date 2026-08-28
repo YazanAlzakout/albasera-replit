@@ -34,7 +34,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     // Fallback: on web (or if event doesn't fire), never block app boot.
     const fallbackTimer = setTimeout(() => {
       finishOnce();
-    }, isWeb ? 1400 : 4500);
+    }, isWeb ? 1400 : 1800);
 
     return () => {
       clearTimeout(fallbackTimer);

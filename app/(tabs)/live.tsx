@@ -2,10 +2,10 @@ import { ContentScreen } from '@/components/shared/ContentScreen';
 import { Brand } from '@/constants/theme';
 import { XtreamStream } from '@/services/xtream-service';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useCallback } from 'react';
 
 export default function LiveScreen() {
-    const handlePress = (stream: XtreamStream) => {
+    const handlePress = useCallback((stream: XtreamStream) => {
         router.push({
             pathname: '/player',
             params: {
@@ -15,7 +15,7 @@ export default function LiveScreen() {
                 name: stream.name,
             },
         });
-    };
+    }, []);
 
     return (
         <ContentScreen

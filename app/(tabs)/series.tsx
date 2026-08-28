@@ -1,10 +1,10 @@
 import { ContentScreen } from '@/components/shared/ContentScreen';
 import { XtreamStream } from '@/services/xtream-service';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useCallback } from 'react';
 
 export default function SeriesScreen() {
-    const handlePress = (stream: XtreamStream) => {
+    const handlePress = useCallback((stream: XtreamStream) => {
         const id = stream.stream_id ?? stream.series_id;
         if (!id) return;
 
@@ -16,7 +16,7 @@ export default function SeriesScreen() {
                 type: 'series',
             },
         });
-    };
+    }, []);
 
     return (
         <ContentScreen

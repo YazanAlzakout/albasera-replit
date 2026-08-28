@@ -12,12 +12,12 @@ import { DownloadStatus, downloadService } from '@/services/download-service';
 import { WatchedItem, watchHistoryService } from '@/services/watch-history-service';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
     Alert,
     FlatList,
-    Image,
     Platform,
     StyleSheet,
     Text,
@@ -76,7 +76,7 @@ function ItemCard({
                     {/* Poster */}
                     <View style={styles.poster}>
                         {!!item.cover && !imgErr ? (
-                            <Image source={{ uri: item.cover }} style={styles.posterImg} resizeMode="cover" onError={() => setImgErr(true)} />
+                            <Image source={{ uri: item.cover }} style={styles.posterImg} contentFit="cover" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                         ) : (
                             <LinearGradient colors={isDark ? ['#1C1C28', '#09090F'] : ['#E5E7EB', '#D1D5DB']} style={styles.posterImg}>
                                 <Ionicons name="film-outline" size={tv(32, 44)} color={isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'} />

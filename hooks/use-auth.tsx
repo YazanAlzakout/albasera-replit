@@ -1,6 +1,6 @@
 import * as SecureStore from '@/utils/secure-store';
 import { router } from 'expo-router';
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { XtreamAuthResponse, xtreamService } from '../services/xtream-service';
 import { useProviders } from './use-providers';
 
@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [activeProvider, connectProvider, providersLoading]);
 
-    const login = async (url: string, username: string, password: string, type: 'xtream' | 'm3u' | 'local' = 'xtream') => {
+    const login = useCallback(async (url: string, username: string, password: string, type: 'xtream' | 'm3u' | 'local' = 'xtream') => {
         setState(current => ({ ...current, isLoggingIn: true }));
         try {
             const user = await connectProvider(url, username, password, type);
@@ -121,9 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setState(current => ({ ...current, isLoading: false, isLoggingIn: false }));
             throw error;
         }
-    };
+    }, [connectProvider, activeProvider]);
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         await SecureStore.deleteItemAsync('xtream_credentials');
         restoredProviderId.current = null;
         setState({
@@ -134,10 +134,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             serverUrl: null,
         });
         router.replace('/login');
-    };
+    }, []);
+
+    const value = useMemo<AuthContextType>(() => ({
+        ...state,
+        login,
+        logout,
+    }), [state, login, logout]);
 
     return (
-        <AuthContext.Provider value={{ ...state, login, logout }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

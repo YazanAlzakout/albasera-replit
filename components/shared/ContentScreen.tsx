@@ -13,6 +13,7 @@ import { FontFamily, TVSafe } from '@/constants/theme';
 import { useLanguage } from '@/contexts/language-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useAppTheme } from '@/contexts/theme-context';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { LOCALE_ORDER } from '@/lang';
 import { XtreamStream, xtreamService } from '@/services/xtream-service';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,10 +26,10 @@ import React, {
     useRef,
     useState,
 } from 'react';
+import { Image } from 'expo-image';
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -117,10 +118,10 @@ const StarRating = React.memo(({ rating }: { rating: number | string }) => {
 
 // ── Poster Card ────────────────────────────────────────────────────────
 const PosterCard = React.memo(({
-    item, onPress, accentColor, isDark, type, cardW, cardH, preferredFocus, index,
+    item, onPressItem, accentColor, isDark, type, cardW, cardH, preferredFocus, index,
 }: {
     item: XtreamStream;
-    onPress: () => void;
+    onPressItem: (item: XtreamStream) => void;
     accentColor: string;
     isDark: boolean;
     type: ContentType;
@@ -138,8 +139,8 @@ const PosterCard = React.memo(({
 
     const handlePress = useCallback(() => {
         scale.value = withSpring(0.93, { damping: 18 }, () => { scale.value = withSpring(1); });
-        onPress();
-    }, [onPress]);
+        onPressItem(item);
+    }, [onPressItem, item]);
 
     return (
         <Animated.View
@@ -150,7 +151,7 @@ const PosterCard = React.memo(({
                 <TVPressable onPress={handlePress} hasTVPreferredFocus={preferredFocus} style={styles.posterShell}>
                     <View style={[styles.posterImg, { width: cardW, height: cardH, backgroundColor: isDark ? '#0A0A14' : '#DDDDF0' }]}>
                         {hasThumb
-                            ? <Image source={{ uri: thumbUri }} style={StyleSheet.absoluteFill} resizeMode="cover" onError={() => setImgErr(true)} />
+                            ? <Image source={{ uri: thumbUri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                             : (
                                 <View style={styles.posterFallback}>
                                     <Ionicons
@@ -199,10 +200,10 @@ const PosterCard = React.memo(({
 
 // ── Live Item ──────────────────────────────────────────────────────────
 const LiveItem = React.memo(({
-    item, onPress, accentColor, isDark, preferredFocus, index,
+    item, onPressItem, accentColor, isDark, preferredFocus, index,
 }: {
     item: XtreamStream;
-    onPress: () => void;
+    onPressItem: (item: XtreamStream) => void;
     accentColor: string;
     isDark: boolean;
     preferredFocus?: boolean;
@@ -216,8 +217,8 @@ const LiveItem = React.memo(({
 
     const handlePress = useCallback(() => {
         scale.value = withSpring(0.97, { damping: 18 }, () => { scale.value = withSpring(1); });
-        onPress();
-    }, [onPress]);
+        onPressItem(item);
+    }, [onPressItem, item]);
 
     const rowBg = isDark
         ? index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.055)'
@@ -239,7 +240,7 @@ const LiveItem = React.memo(({
                     <View style={[styles.liveAccentLine, { backgroundColor: accentColor }]} />
                     <View style={[styles.liveThumb, { backgroundColor: isDark ? '#0D0D1C' : '#EAEAF8' }]}>
                         {hasThumb
-                            ? <Image source={{ uri: item.stream_icon }} style={styles.liveThumbImg} resizeMode="contain" onError={() => setImgErr(true)} />
+                            ? <Image source={{ uri: item.stream_icon }} style={styles.liveThumbImg} contentFit="contain" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                             : <Ionicons name="tv-outline" size={tv(20, 26)} color={accentColor + '70'} />
                         }
                     </View>
@@ -267,10 +268,10 @@ const LiveItem = React.memo(({
 
 // ── Live Icon Card ─────────────────────────────────────────────────────
 const LiveIconCard = React.memo(({
-    item, onPress, accentColor, isDark, preferredFocus, index, cardW, cardH,
+    item, onPressItem, accentColor, isDark, preferredFocus, index, cardW, cardH,
 }: {
     item: XtreamStream;
-    onPress: () => void;
+    onPressItem: (item: XtreamStream) => void;
     accentColor: string;
     isDark: boolean;
     preferredFocus?: boolean;
@@ -288,8 +289,8 @@ const LiveIconCard = React.memo(({
 
     const handlePress = useCallback(() => {
         scale.value = withSpring(0.95, { damping: 18 }, () => { scale.value = withSpring(1); });
-        onPress();
-    }, [onPress]);
+        onPressItem(item);
+    }, [onPressItem, item]);
 
     return (
         <Animated.View entering={FadeInDown.duration(240).delay(Math.min(index * 25, 260))} style={{ width: cardW }}>
@@ -318,7 +319,9 @@ const LiveIconCard = React.memo(({
                             <Image
                                 source={{ uri: item.stream_icon }}
                                 style={styles.liveIconImg}
-                                resizeMode="contain"
+                                contentFit="contain"
+                                cachePolicy="disk"
+                                transition={200}
                                 onError={() => setImgErr(true)}
                             />
                         ) : (
@@ -630,6 +633,8 @@ export function ContentScreen({ type, accentColor, gradientColors, icon, onPress
         if (!exists) setActiveCat('all');
     }, [activeCat, visibleCategories]);
 
+    const debouncedQuery = useDebouncedValue(query, 200);
+
     const filtered = useMemo(() => {
         let list = streams.filter((s) => {
             const catId = String(s.category_id ?? '');
@@ -637,12 +642,12 @@ export function ContentScreen({ type, accentColor, gradientColors, icon, onPress
             return !hiddenCategories[type].includes(catId) && !hiddenStreams[type].includes(streamId);
         });
         if (activeCat !== 'all') list = list.filter(s => String(s.category_id) === activeCat);
-        if (query.trim()) {
-            const q = query.trim().toLowerCase();
+        if (debouncedQuery.trim()) {
+            const q = debouncedQuery.trim().toLowerCase();
             list = list.filter(s => s.name?.toLowerCase().includes(q));
         }
         return list;
-    }, [streams, activeCat, query, hiddenCategories, hiddenStreams, type]);
+    }, [streams, activeCat, debouncedQuery, hiddenCategories, hiddenStreams, type]);
 
     const toggleLanguage = useCallback(() => {
         const i = LOCALE_ORDER.indexOf(locale);
@@ -659,7 +664,7 @@ export function ContentScreen({ type, accentColor, gradientColors, icon, onPress
         <PosterCard
             item={item}
             index={index}
-            onPress={() => onPressItem(item)}
+            onPressItem={onPressItem}
             accentColor={accentColor}
             isDark={isDark}
             type={type}
@@ -673,7 +678,7 @@ export function ContentScreen({ type, accentColor, gradientColors, icon, onPress
         <LiveItem
             item={item}
             index={index}
-            onPress={() => onPressItem(item)}
+            onPressItem={onPressItem}
             accentColor={accentColor}
             isDark={isDark}
             preferredFocus={isTV && index === 0}
@@ -684,7 +689,7 @@ export function ContentScreen({ type, accentColor, gradientColors, icon, onPress
         <LiveIconCard
             item={item}
             index={index}
-            onPress={() => onPressItem(item)}
+            onPressItem={onPressItem}
             accentColor={accentColor}
             isDark={isDark}
             preferredFocus={isTV && index === 0}

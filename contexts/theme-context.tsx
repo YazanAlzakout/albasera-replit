@@ -1,5 +1,5 @@
 import * as SecureStore from '@/utils/secure-store';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 
 export type ThemeMode = 'system' | 'dark' | 'light';
@@ -50,16 +50,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? (systemScheme === 'dark' ? 'dark' : 'light')
         : mode;
 
+    const value = useMemo<ThemeContextType>(() => ({
+        mode,
+        resolved,
+        isDark: resolved === 'dark',
+        toggleTheme,
+        setMode,
+    }), [mode, resolved, toggleTheme, setMode]);
+
     return (
-        <ThemeContext.Provider
-            value={{
-                mode,
-                resolved,
-                isDark: resolved === 'dark',
-                toggleTheme,
-                setMode,
-            }}
-        >
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );

@@ -18,12 +18,12 @@ import { useWatchLibrarySnapshot } from '@/hooks/use-watch-library-snapshot';
 import { WatchedItem, watchHistoryService } from '@/services/watch-history-service';
 import { xtreamService, XtreamStream } from '@/services/xtream-service';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Image,
     Platform,
     ScrollView,
     StyleSheet,
@@ -166,7 +166,7 @@ function ContinueCard({ item, isDark, isRTL, onPress }: {
                 {/* Thumbnail */}
                 <View style={styles.continueThumb}>
                     {!!item.cover && !imgErr ? (
-                        <Image source={{ uri: item.cover }} style={styles.continueImg} resizeMode="cover" onError={() => setImgErr(true)} />
+                        <Image source={{ uri: item.cover }} style={styles.continueImg} contentFit="cover" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                     ) : (
                         <View style={[styles.continueImg, { backgroundColor: isDark ? '#1C1C28' : '#E5E7EB', alignItems: 'center', justifyContent: 'center' }]}>
                             <Ionicons name={typeIcon[item.type] ?? 'play-outline'} size={tv(28, 36)} color={isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'} />
@@ -220,7 +220,7 @@ function FeaturedCard({ item, isDark, onPress }: {
         <Animated.View style={scaleStyle}>
             <TVPressable onPress={handlePress} style={styles.featuredCard}>
                 {coverUrl && !imgErr ? (
-                    <Image source={{ uri: coverUrl }} style={styles.featuredImg} resizeMode="cover" onError={() => setImgErr(true)} />
+                    <Image source={{ uri: coverUrl }} style={styles.featuredImg} contentFit="cover" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                 ) : (
                     <LinearGradient colors={['#1C1C28', '#09090F']} style={styles.featuredImg} />
                 )}

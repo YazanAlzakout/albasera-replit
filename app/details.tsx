@@ -22,12 +22,12 @@ import { DownloadItem, downloadService } from '@/services/download-service';
 import { watchHistoryService } from '@/services/watch-history-service';
 import { xtreamService } from '@/services/xtream-service';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Alert,
-    Image,
     NativeScrollEvent,
     NativeSyntheticEvent,
     Platform,
@@ -297,7 +297,7 @@ const EpisodeCard = React.memo(({
                 {/* Thumbnail */}
                 {hasThumb && (
                     <View style={epS.thumbBox}>
-                        <Image source={{ uri: thumbUrl }} style={epS.thumb} resizeMode="cover" onError={() => setImgErr(true)} />
+                        <Image source={{ uri: thumbUrl }} style={epS.thumb} contentFit="cover" cachePolicy="disk" transition={200} onError={() => setImgErr(true)} />
                         <View style={epS.playOverlay}>
                             <Ionicons name="play" size={tv(13, 18)} color="#fff" />
                         </View>
@@ -649,7 +649,7 @@ export default function DetailsScreen() {
             {/* ══ HERO (parallax) ══════════════════════════ */}
             <Animated.View style={[S.heroWrap, { width, height: heroHeight }, heroParallax]}>
                 {coverUrl
-                    ? <Image source={{ uri: coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                    ? <Image source={{ uri: coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" transition={200} />
                     : <LinearGradient colors={['#14141F', '#07070E']} style={StyleSheet.absoluteFill} />
                 }
                 {/* Three-layer gradient for depth */}
@@ -831,7 +831,7 @@ export default function DetailsScreen() {
                             {/* Season cover */}
                             {!!seasonInfo?.cover && (
                                 <View style={S.seasonCover}>
-                                    <Image source={{ uri: seasonInfo.cover }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                                    <Image source={{ uri: seasonInfo.cover }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" transition={200} />
                                     <LinearGradient
                                         colors={['transparent', isDark ? 'rgba(7,7,14,0.96)' : 'rgba(246,246,252,0.96)']}
                                         style={[StyleSheet.absoluteFill, { top: '35%' }]}

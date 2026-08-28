@@ -5,7 +5,7 @@ import translations, {
     LOCALE_ORDER,
 } from '@/lang';
 import * as SecureStore from '@/utils/secure-store';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 // ─── Context Types ────────────────────────────────────────────────────────────
 interface LanguageContextType {
@@ -66,13 +66,13 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setLocale(LOCALE_ORDER[nextIndex]);
     }, [locale, setLocale]);
 
-    const value: LanguageContextType = {
+    const value = useMemo<LanguageContextType>(() => ({
         locale,
         t: translations[locale],
         isRTL: isRTLLocale(locale),
         setLocale,
         cycleLocale,
-    };
+    }), [locale, setLocale, cycleLocale]);
 
     return (
         <LanguageContext.Provider value={value}>

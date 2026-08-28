@@ -1,5 +1,5 @@
 import * as SecureStore from '@/utils/secure-store';
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 interface SettingsState {
     hideLive: boolean;
@@ -76,21 +76,30 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return writeQueue.current;
     }, []);
 
-    const toggleHideLive = () => updateSettings(current => ({ ...current, hideLive: !current.hideLive }));
+    const toggleHideLive = useCallback(
+        () => updateSettings(current => ({ ...current, hideLive: !current.hideLive })),
+        [updateSettings],
+    );
 
-    const toggleHideMovies = () => updateSettings(current => ({ ...current, hideMovies: !current.hideMovies }));
+    const toggleHideMovies = useCallback(
+        () => updateSettings(current => ({ ...current, hideMovies: !current.hideMovies })),
+        [updateSettings],
+    );
 
-    const toggleHideSeries = () => updateSettings(current => ({ ...current, hideSeries: !current.hideSeries }));
+    const toggleHideSeries = useCallback(
+        () => updateSettings(current => ({ ...current, hideSeries: !current.hideSeries })),
+        [updateSettings],
+    );
 
-    const isCategoryHidden = (type: 'live' | 'movie' | 'series', categoryId: string) => {
+    const isCategoryHidden = useCallback((type: 'live' | 'movie' | 'series', categoryId: string) => {
         return state.hiddenCategories[type].includes(String(categoryId));
-    };
+    }, [state.hiddenCategories]);
 
-    const isStreamHidden = (type: 'live' | 'movie' | 'series', streamId: string) => {
+    const isStreamHidden = useCallback((type: 'live' | 'movie' | 'series', streamId: string) => {
         return state.hiddenStreams[type].includes(String(streamId));
-    };
+    }, [state.hiddenStreams]);
 
-    const toggleHiddenCategory = (type: 'live' | 'movie' | 'series', categoryId: string) => {
+    const toggleHiddenCategory = useCallback((type: 'live' | 'movie' | 'series', categoryId: string) => {
         const id = String(categoryId);
         return updateSettings(current => {
             const list = current.hiddenCategories[type];
@@ -100,9 +109,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 hiddenCategories: { ...current.hiddenCategories, [type]: nextList },
             };
         });
-    };
+    }, [updateSettings]);
 
-    const toggleHiddenStream = (type: 'live' | 'movie' | 'series', streamId: string) => {
+    const toggleHiddenStream = useCallback((type: 'live' | 'movie' | 'series', streamId: string) => {
         const id = String(streamId);
         return updateSettings(current => {
             const list = current.hiddenStreams[type];
@@ -112,21 +121,30 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 hiddenStreams: { ...current.hiddenStreams, [type]: nextList },
             };
         });
-    };
+    }, [updateSettings]);
+
+    const value = useMemo<SettingsContextType>(() => ({
+        ...state,
+        toggleHideLive,
+        toggleHideMovies,
+        toggleHideSeries,
+        isCategoryHidden,
+        isStreamHidden,
+        toggleHiddenCategory,
+        toggleHiddenStream,
+    }), [
+        state,
+        toggleHideLive,
+        toggleHideMovies,
+        toggleHideSeries,
+        isCategoryHidden,
+        isStreamHidden,
+        toggleHiddenCategory,
+        toggleHiddenStream,
+    ]);
 
     return (
-        <SettingsContext.Provider
-            value={{
-                ...state,
-                toggleHideLive,
-                toggleHideMovies,
-                toggleHideSeries,
-                isCategoryHidden,
-                isStreamHidden,
-                toggleHiddenCategory,
-                toggleHiddenStream,
-            }}
-        >
+        <SettingsContext.Provider value={value}>
             {children}
         </SettingsContext.Provider>
     );
