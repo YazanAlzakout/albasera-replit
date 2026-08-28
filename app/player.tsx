@@ -701,13 +701,23 @@ export default function PlayerScreen() {
             // just no sound. A hard error is what the statusChange listener
             // above catches; this is the "looks fine but is silently mute"
             // case that needs its own check, right when we know playback
-            // actually succeeded. `availableAudioTracks` lists every track the
-            // stream declares, decodable or not (patched into expo-video's
-            // `isSupported` field, mirroring the field it already exposes for
-            // video tracks) - a track being present is not the same as it
-            // being playable, so check for at least one *supported* track.
-            const hasSupportedAudio = audioTracks.some((t: { isSupported?: boolean }) => t.isSupported);
-            if (isAndroid && !useNativeVlc && !hasSupportedAudio) {
+            // actually succeeded.
+            //
+            // `availableAudioTracks` lists every track the stream declares,
+            // decodable or not - expo-video is patched to also expose Media3's
+            // own `isSupported` flag per track (see patches/expo-video), which
+            // would in principle be the precise signal here. In practice it
+            // flags far more tracks as "unsupported" than are actually silent
+            // (e.g. AC-3 on devices without a hardware decoder can still play
+            // audibly through Media3's own handling), so gating fallback on it
+            // pushed way more channels/movies/series onto VLC than intended -
+            // VLC is measurably heavier, and that showed up as stutter
+            // everywhere. Falling back only when NO track is reported at all
+            // is the narrower, safe signal; it won't catch every silently-mute
+            // case (a stream with exactly one unsupported track, like the MP2
+            // case this was meant to add) but that's the deliberate tradeoff
+            // until there's a more precise signal than isTrackSupported().
+            if (isAndroid && !useNativeVlc && audioTracks.length === 0) {
                 fallBackToVlc();
             }
             const contentType = type as string;
