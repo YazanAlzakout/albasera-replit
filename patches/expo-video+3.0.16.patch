@@ -1,36 +1,60 @@
-diff --git a/node_modules/expo-video/android/build.gradle b/node_modules/expo-video/android/build.gradle
-index f17d2d4..cd1852c 100644
---- a/node_modules/expo-video/android/build.gradle
-+++ b/node_modules/expo-video/android/build.gradle
-@@ -26,6 +26,13 @@ dependencies {
-   implementation "androidx.media3:media3-ui:${androidxMedia3Version}"
-   implementation "androidx.media3:media3-datasource-okhttp:${androidxMedia3Version}"
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayerAudioTracks.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayerAudioTracks.kt
+index 0cdcc0b..c9ccfdc 100644
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayerAudioTracks.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayerAudioTracks.kt
+@@ -60,7 +60,8 @@ class VideoPlayerAudioTracks(owner: VideoPlayer) : VideoPlayerListener {
  
-+  // MP2 (MPEG Layer II) audio fallback for Media3, used only when the platform
-+  // MediaCodec can't decode a format (see VideoPlayer.kt's
-+  // setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)). Vendored at
-+  // modules/decoder-ffmpeg-mp2 (repo root) instead of node_modules, since this
-+  // file only survives via patch-package (node_modules is not reproducible).
-+  implementation project(':decoder-ffmpeg-mp2')
-+
-   def fragment_version = "1.6.2"
-   implementation "androidx.fragment:fragment:$fragment_version"
-   implementation "androidx.fragment:fragment-ktx:$fragment_version"
-diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
-index 1c7a55c..a857904 100644
---- a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
-+++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
-@@ -55,6 +55,13 @@ class VideoPlayer(val context: Context, appContext: AppContext, source: VideoSou
-   private var renderersFactory = DefaultRenderersFactory(context)
-     .forceEnableMediaCodecAsynchronousQueueing()
-     .setEnableDecoderFallback(true)
-+    // ON (not PREFER) keeps MediaCodec as the primary renderer for every format it
-+    // supports — hardware video decode is unaffected. Extension renderers (here,
-+    // FfmpegAudioRenderer from modules/decoder-ffmpeg-mp2, if/when its native lib is
-+    // built and present) are only used as a fallback when the core renderer can't
-+    // handle the format, e.g. MP2/MPEG Layer II audio. No-op when no extension
-+    // renderer is registered/available.
-+    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-   private var listeners: MutableList<WeakReference<VideoPlayerListener>> = mutableListOf()
-   private var currentPlayerView = MutableWeakReference<PlayerView?>(null)
-   val loadControl: VideoPlayerLoadControl = VideoPlayerLoadControl()
+         if (MimeTypes.isAudio(format.sampleMimeType)) {
+           formatsToGroups[format] = group.mediaTrackGroup to i
+-          val track = AudioTrack.fromFormat(format) ?: continue
++          val isSupported = group.isTrackSupported(i)
++          val track = AudioTrack.fromFormat(format, isSupported) ?: continue
+           availableAudioTracks.add(track)
+         }
+       }
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/records/Tracks.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/records/Tracks.kt
+index 20dcbb7..e185b6c 100644
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/records/Tracks.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/records/Tracks.kt
+@@ -32,10 +32,11 @@ class SubtitleTrack(
+ class AudioTrack(
+   @Field val id: String,
+   @Field val language: String?,
+-  @Field val label: String?
++  @Field val label: String?,
++  @Field val isSupported: Boolean = true
+ ) : Record, Serializable {
+   companion object {
+-    fun fromFormat(format: Format?): AudioTrack? {
++    fun fromFormat(format: Format?, isSupported: Boolean = true): AudioTrack? {
+       format ?: return null
+       val id = format.id ?: return null
+       val language = format.language
+@@ -44,7 +45,8 @@ class AudioTrack(
+       return AudioTrack(
+         id = id,
+         language = language,
+-        label = label
++        label = label,
++        isSupported = isSupported
+       )
+     }
+   }
+diff --git a/node_modules/expo-video/build/VideoPlayer.types.d.ts b/node_modules/expo-video/build/VideoPlayer.types.d.ts
+index 204f98d..d7e3b4a 100644
+--- a/node_modules/expo-video/build/VideoPlayer.types.d.ts
++++ b/node_modules/expo-video/build/VideoPlayer.types.d.ts
+@@ -551,5 +551,12 @@ export type AudioTrack = {
+      * Label of the audio track in the language of the device.
+      */
+     label: string;
++    /**
++     * Whether the device has a decoder capable of playing this audio track.
++     * A track can still appear in `availableAudioTracks` (it exists in the
++     * stream) while this is `false` if nothing on the device can decode it.
++     * @platform android
++     */
++    isSupported: boolean;
+ };
+ //# sourceMappingURL=VideoPlayer.types.d.ts.map
+\ No newline at end of file

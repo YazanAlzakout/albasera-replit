@@ -701,8 +701,13 @@ export default function PlayerScreen() {
             // just no sound. A hard error is what the statusChange listener
             // above catches; this is the "looks fine but is silently mute"
             // case that needs its own check, right when we know playback
-            // actually succeeded.
-            if (isAndroid && !useNativeVlc && audioTracks.length === 0) {
+            // actually succeeded. `availableAudioTracks` lists every track the
+            // stream declares, decodable or not (patched into expo-video's
+            // `isSupported` field, mirroring the field it already exposes for
+            // video tracks) - a track being present is not the same as it
+            // being playable, so check for at least one *supported* track.
+            const hasSupportedAudio = audioTracks.some((t: { isSupported?: boolean }) => t.isSupported);
+            if (isAndroid && !useNativeVlc && !hasSupportedAudio) {
                 fallBackToVlc();
             }
             const contentType = type as string;
