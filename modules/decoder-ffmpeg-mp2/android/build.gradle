@@ -42,6 +42,11 @@ dependencies {
     api "androidx.media3:media3-decoder:${androidxMedia3Version}"
     implementation "androidx.media3:media3-exoplayer:${androidxMedia3Version}"
     implementation "androidx.media3:media3-common:${androidxMedia3Version}"
-    compileOnly "androidx.annotation:annotation:1.7.1"
+    // No explicit version: React Native's Gradle plugin enforces "consistent
+    // resolution" across the whole project for AndroidX libraries, strictly
+    // pinning androidx.annotation:annotation to whatever version the rest of
+    // the app resolved (1.6.0 here) - a hardcoded 1.7.1 here conflicted with
+    // that project-wide constraint and failed dependency resolution outright.
+    compileOnly "androidx.annotation:annotation"
     compileOnly "org.checkerframework:checker-qual:3.42.0"
 }
