@@ -83,7 +83,12 @@ jobs:
           set -eu
           MODULE_MAIN="modules/decoder-ffmpeg-mp2/android/src/main"
           mkdir -p "${MODULE_MAIN}/jni"
-          ln -sfn "$(pwd)/ffmpeg-src" "${MODULE_MAIN}/jni/ffmpeg"
+          # On the very first run this path doesn't exist. On every run since,
+          # it's a real directory (the previous run's "Vendor" step commits
+          # real headers/libs here, not a symlink) - `ln -sfn` won't replace a
+          # real, non-empty directory, so remove whatever is there first.
+          rm -rf "${MODULE_MAIN}/jni/ffmpeg"
+          ln -s "$(pwd)/ffmpeg-src" "${MODULE_MAIN}/jni/ffmpeg"
 
       # Builds only armeabi-v7a and arm64-v8a (per project decision: AlBasera's
       # real Android-phone and Android-TV-box audience is ARM; x86/x86_64 is
@@ -202,7 +207,12 @@ jobs:
         run: |
           set -eu
           DEST="modules/decoder-ffmpeg-mp2/android/src/main/jni/ffmpeg"
-          rm -f "${DEST}"   # remove the build-time symlink
+          # Remove whatever is currently there - a symlink on the first run
+          # ever, or a real directory (committed by a previous run's vendor
+          # step) on every run since. `rm -f` only removes files/symlinks and
+          # fails outright on a real directory, which is what broke this step
+          # on every run after the first.
+          rm -rf "${DEST}"
           mkdir -p "${DEST}"
 
           for dir in libavutil libavcodec libswresample; do
