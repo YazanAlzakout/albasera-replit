@@ -10,6 +10,7 @@ import React, {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from 'react';
@@ -163,10 +164,13 @@ export const ProvidersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const activeProvider = providers.find(p => p.id === activeId) ?? null;
 
+    const value = useMemo(
+        () => ({ isLoading, providers, activeId, activeProvider, addProvider, updateProvider, removeProvider, setActiveId }),
+        [isLoading, providers, activeId, activeProvider, addProvider, updateProvider, removeProvider, setActiveId],
+    );
+
     return (
-        <ProvidersContext.Provider
-            value={{ isLoading, providers, activeId, activeProvider, addProvider, updateProvider, removeProvider, setActiveId }}
-        >
+        <ProvidersContext.Provider value={value}>
             {children}
         </ProvidersContext.Provider>
     );

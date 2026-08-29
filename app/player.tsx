@@ -184,6 +184,7 @@ export default function PlayerScreen() {
 
     const [showControls, setShowControls] = useState(true);
     const showControlsRef = useRef(true);
+    const tvEventHandlerRef = useRef<(evt: { eventType: string }) => void>(() => {});
     const [showSpeedMenu, setShowSpeedMenu] = useState(false);
     const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
     const [showAudioMenu, setShowAudioMenu] = useState(false);
@@ -481,7 +482,14 @@ export default function PlayerScreen() {
         }, 600);
     }, [duration, startControlsTimer, player]);
 
-    useTVEventHandler((evt) => {
+    // Kept as a ref-backed stable callback: react-native's useTVEventHandler
+    // tears down and re-registers the native remote-control listener whenever
+    // the handler's identity changes (its effect deps on the callback). This
+    // component re-renders on every D-pad focus move (activeFocus state), so
+    // an inline handler here was churning that native subscription on every
+    // single remote press - the ref keeps the identity passed to
+    // useTVEventHandler permanently stable while still running current logic.
+    tvEventHandlerRef.current = (evt) => {
         if (!isTV) return;
         if (isLocked) return;
         if (showChannelGuide) return;
@@ -519,7 +527,9 @@ export default function PlayerScreen() {
                 startControlsTimer();
                 break;
         }
-    });
+    };
+
+    useTVEventHandler(useCallback((evt) => tvEventHandlerRef.current(evt), []));
 
     useEffect(() => {
         if (!isTV || !isWeb) return;
