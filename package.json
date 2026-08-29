@@ -66,6 +66,11 @@
       "exclude": [
         "react-native"
       ]
+    },
+    "autolinking": {
+      "buildFromSource": [
+        "expo-video"
+      ]
     }
   },
   "overrides": {
