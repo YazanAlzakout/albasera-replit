@@ -250,12 +250,15 @@ const metaS = StyleSheet.create({
 
 // ── Episode card ─────────────────────────────────────────
 const EpisodeCard = React.memo(({
-    episode, isDark, onPress, onDownload, download, isRTL, episodeLabel,
+    episode, episodeIndex, nextEpisode, isDark, onPressEpisode, canDownload, onDownloadEpisode, download, isRTL, episodeLabel,
 }: {
     episode: any;
+    episodeIndex: number;
+    nextEpisode: any;
     isDark: boolean;
-    onPress: () => void;
-    onDownload?: () => void;
+    onPressEpisode: (episode: any, index: number, nextEpisode: any) => void;
+    canDownload: boolean;
+    onDownloadEpisode: (episode: any, index: number) => void;
     download?: DownloadItem;
     isRTL: boolean;
     episodeLabel: string;
@@ -266,8 +269,12 @@ const EpisodeCard = React.memo(({
 
     const handlePress = useCallback(() => {
         scale.value = withSpring(0.97, { damping: 16 }, () => { scale.value = withSpring(1); });
-        onPress();
-    }, [onPress]);
+        onPressEpisode(episode, episodeIndex, nextEpisode);
+    }, [episode, episodeIndex, nextEpisode, onPressEpisode, scale]);
+
+    const handleDownloadPress = useCallback(() => {
+        onDownloadEpisode(episode, episodeIndex);
+    }, [episode, episodeIndex, onDownloadEpisode]);
 
     const bg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
     const border = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
@@ -325,8 +332,8 @@ const EpisodeCard = React.memo(({
                     {/* Play icon */}
                     <Ionicons name={download?.status === 'completed' ? 'phone-portrait-outline' : 'play-circle'} size={tv(26, 38)} color={Brand.primary + 'CC'} />
                 </TVPressable>
-                {!!onDownload && (
-                    <TVPressable onPress={onDownload} style={[epS.downloadBtn, { backgroundColor: bg, borderColor: border }]} focusVariant="control">
+                {canDownload && (
+                    <TVPressable onPress={handleDownloadPress} style={[epS.downloadBtn, { backgroundColor: bg, borderColor: border }]} focusVariant="control">
                         <Ionicons
                             name={
                                 download?.status === 'completed' ? 'checkmark-circle'
@@ -584,6 +591,33 @@ export default function DetailsScreen() {
             );
         }
     }, [downloads, extension, handlePlay, info, isRTL, refreshDownloads, type]);
+
+    // Stable dispatchers for EpisodeCard (a React.memo'd list item) - passing
+    // these instead of a fresh per-item closure from inside activeEps.map()
+    // keeps EpisodeCard's memo effective, so unrelated re-renders of this
+    // screen don't re-render every episode row in a long list.
+    const handlePlayEpisode = useCallback((ep: any, index: number, nextEp: any) => {
+        handlePlay(
+            ep.id ?? ep.stream_id,
+            ep.container_extension ?? 'mkv',
+            `S${activeSeason} E${ep.episode_num ?? index + 1}`,
+            nextEp ? {
+                streamId: nextEp.id ?? nextEp.stream_id,
+                ext: nextEp.container_extension ?? 'mkv',
+                label: `S${activeSeason} E${nextEp.episode_num ?? index + 2}`,
+            } : undefined,
+            ep,
+        );
+    }, [handlePlay, activeSeason]);
+
+    const handleDownloadEpisode = useCallback((ep: any, index: number) => {
+        handleDownload(
+            ep.id ?? ep.stream_id,
+            ep.container_extension ?? 'mkv',
+            `S${activeSeason} E${ep.episode_num ?? index + 1}`,
+            ep,
+        );
+    }, [handleDownload, activeSeason]);
 
     const handleFavorite = useCallback(async () => {
         const cover = info?.cover_big || info?.movie_image || info?.cover || '';
@@ -863,21 +897,13 @@ export default function DetailsScreen() {
                                     <EpisodeCard
                                         key={ep.id ?? i}
                                         episode={ep}
+                                        episodeIndex={i}
+                                        nextEpisode={nextEp}
                                         isDark={isDark}
                                         isRTL={isRTL}
                                         episodeLabel={t.content.episodes}
-                                        onPress={() => handlePlay(
-                                            ep.id ?? ep.stream_id,
-                                            ep.container_extension ?? 'mkv',
-                                            `S${activeSeason} E${ep.episode_num ?? i + 1}`,
-                                            nextEp ? {
-                                                streamId: nextEp.id ?? nextEp.stream_id,
-                                                ext: nextEp.container_extension ?? 'mkv',
-                                                label: `S${activeSeason} E${nextEp.episode_num ?? i + 2}`,
-                                            } : undefined,
-                                            ep,
-                                        )}
-                                        onDownload={downloadService.canDownload({
+                                        onPressEpisode={handlePlayEpisode}
+                                        canDownload={downloadService.canDownload({
                                             type: 'series',
                                             sourceUrl: xtreamService.getStreamUrl(
                                                 Number(ep.id ?? ep.stream_id),
@@ -885,12 +911,8 @@ export default function DetailsScreen() {
                                                 'series',
                                             ),
                                             extension: ep.container_extension ?? 'mkv',
-                                        }) ? () => handleDownload(
-                                                ep.id ?? ep.stream_id,
-                                                ep.container_extension ?? 'mkv',
-                                                `S${activeSeason} E${ep.episode_num ?? i + 1}`,
-                                                ep,
-                                            ) : undefined}
+                                        })}
+                                        onDownloadEpisode={handleDownloadEpisode}
                                         download={downloads[String(ep.id ?? ep.stream_id)]}
                                     />
                                 );

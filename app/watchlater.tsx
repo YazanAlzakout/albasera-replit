@@ -43,11 +43,11 @@ type LibraryItem = WatchedItem & {
 };
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
-function ItemCard({
-    item, width, isDark, isRTL, onPress, onRemove,
+const ItemCard = React.memo(function ItemCard({
+    item, width, isDark, isRTL, onPressItem, onRemoveItem,
 }: {
     item: LibraryItem; width: number; isDark: boolean; isRTL: boolean;
-    onPress: () => void; onRemove: () => void;
+    onPressItem: (item: LibraryItem) => void; onRemoveItem: (item: LibraryItem) => void;
 }) {
     const scale = useSharedValue(1);
     const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -64,10 +64,12 @@ function ItemCard({
     };
     const typeInfo = typeMap[item.type] ?? { label: '?', color: '#888' };
 
-    const handlePress = () => {
+    const handlePress = useCallback(() => {
         scale.value = withSpring(0.95, { damping: 12 }, () => { scale.value = withSpring(1); });
-        onPress();
-    };
+        onPressItem(item);
+    }, [item, onPressItem, scale]);
+
+    const handleRemove = useCallback(() => onRemoveItem(item), [item, onRemoveItem]);
 
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={{ width, marginBottom: GAP }}>
@@ -101,7 +103,7 @@ function ItemCard({
                             </View>
                         )}
                         {/* Remove button */}
-                        <TVPressable onPress={onRemove} style={styles.removeBtn} focusVariant="control">
+                        <TVPressable onPress={handleRemove} style={styles.removeBtn} focusVariant="control">
                             <Ionicons name="close-circle" size={tv(22, 28)} color="rgba(255,255,255,0.85)" />
                         </TVPressable>
                         {/* Play overlay */}
@@ -125,7 +127,7 @@ function ItemCard({
             </Animated.View>
         </Animated.View>
     );
-}
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WatchLaterScreen() {
@@ -161,9 +163,8 @@ export default function WatchLaterScreen() {
         setItems([...downloadedItems, ...watchLater.filter((item) => !downloadIds.has(item.id))]);
     };
 
-    const handlePress = (item: WatchedItem) => {
-        const libraryItem = item as LibraryItem;
-        if (libraryItem.downloadStatus === 'completed' && item.localUri) {
+    const handlePress = useCallback((item: LibraryItem) => {
+        if (item.downloadStatus === 'completed' && item.localUri) {
             router.push({
                 pathname: '/player',
                 params: {
@@ -182,9 +183,9 @@ export default function WatchLaterScreen() {
             pathname: '/details',
             params: { streamId: item.id, type: item.type, extension: item.extension ?? 'mp4' },
         });
-    };
+    }, []);
 
-    const handleRemove = (item: LibraryItem) => {
+    const handleRemove = useCallback((item: LibraryItem) => {
         Alert.alert(t.dashboard.removeConfirm, item.name, [
             { text: t.common.cancel, style: 'cancel' },
             {
@@ -199,7 +200,18 @@ export default function WatchLaterScreen() {
                 },
             },
         ]);
-    };
+    }, [t]);
+
+    const renderItem = useCallback(({ item }: { item: LibraryItem }) => (
+        <ItemCard
+            item={item}
+            width={cardWidth}
+            isDark={isDark}
+            isRTL={isRTL}
+            onPressItem={handlePress}
+            onRemoveItem={handleRemove}
+        />
+    ), [cardWidth, isDark, isRTL, handlePress, handleRemove]);
 
     return (
         <View style={[styles.root, { backgroundColor: bg }]}>
@@ -234,16 +246,7 @@ export default function WatchLaterScreen() {
                     contentContainerStyle={[styles.grid, { paddingHorizontal: tv(20, TVSafe.paddingHorizontal) }]}
                     columnWrapperStyle={{ gap: GAP, flexDirection: isRTL ? 'row-reverse' : 'row' }}
                     showsVerticalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                        <ItemCard
-                            item={item}
-                            width={cardWidth}
-                            isDark={isDark}
-                            isRTL={isRTL}
-                            onPress={() => handlePress(item)}
-                            onRemove={() => handleRemove(item)}
-                        />
-                    )}
+                    renderItem={renderItem}
                 />
             ) : (
                 <View style={styles.emptyWrap}>
