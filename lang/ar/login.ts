@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'تعذّر الاتصال بالسيرفر، تأكد من البيانات',
     noProviderAlert: 'تنبيه',
     noProviderAlertMsg: 'أضف مزوداً أولاً',
+    saveFailed: 'فشل الحفظ',
+    saveFailedMsg: 'تعذّر حفظ هذا المزود، حاول مرة أخرى',
 };
 
 export default login;

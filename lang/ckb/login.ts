@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'نەتوانرا پەیوەندی بە ڕاژەوە بکرێت. تکایە زانیارییەکانت بپشکنە.',
     noProviderAlert: 'ئاگاداری',
     noProviderAlertMsg: 'تکایە سەرەتا پێشکەشکارێک زیادبکە',
+    saveFailed: 'پاشەکەوتکردن سەرکەوتوو نەبوو',
+    saveFailedMsg: 'نەتوانرا ئەم پێشکەشکارە پاشەکەوت بکرێت. تکایە دووبارە هەوڵبدەرەوە.',
 };
 
 export default login;

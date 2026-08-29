@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'Impossible de se connecter au serveur.',
     noProviderAlert: 'Attention',
     noProviderAlertMsg: "Veuillez d'abord ajouter un fournisseur",
+    saveFailed: "Échec de l'enregistrement",
+    saveFailedMsg: "Impossible d'enregistrer ce fournisseur. Veuillez réessayer.",
 };
 
 export default login;

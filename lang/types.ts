@@ -65,6 +65,9 @@ export interface LoginTranslations {
     // No provider alert
     noProviderAlert: string;
     noProviderAlertMsg: string;
+    // Save provider failure
+    saveFailed: string;
+    saveFailedMsg: string;
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────

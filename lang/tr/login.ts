@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'Sunucuya bağlanılamadı. Lütfen kimlik bilgilerinizi kontrol edin.',
     noProviderAlert: 'Uyarı',
     noProviderAlertMsg: 'Lütfen önce bir sağlayıcı ekleyin',
+    saveFailed: 'Kaydetme Başarısız',
+    saveFailedMsg: 'Bu sağlayıcı kaydedilemedi. Lütfen tekrar deneyin.',
 };
 
 export default login;

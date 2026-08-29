@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'Could not connect to server. Please check your credentials.',
     noProviderAlert: 'Notice',
     noProviderAlertMsg: 'Please add a provider first',
+    saveFailed: 'Save Failed',
+    saveFailedMsg: 'Could not save this provider. Please try again.',
 };
 
 export default login;

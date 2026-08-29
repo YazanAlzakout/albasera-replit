@@ -29,6 +29,8 @@ const login: LoginTranslations = {
     connectionErrorMsg: 'Nikare bi pêşkêşkarê re têkiliyê dayne. Ji kerema xwe agahiyên xwe kontrol bike.',
     noProviderAlert: 'Daxuyanî',
     noProviderAlertMsg: 'Ji kerema xwe pêşî pêşkeşkarek zêde bike',
+    saveFailed: 'Tomarkirin Serneket',
+    saveFailedMsg: 'Nikare vê pêşkeşkarê tomar bike. Ji kerema xwe dîsa biceribîne.',
 };
 
 export default login;

@@ -143,10 +143,10 @@ export default function AddProviderScreen() {
     const isEditMode   = !!editProvider;
 
     const [type,     setType]     = useState<'xtream' | 'm3u' | 'local'>(editProvider?.type ?? 'xtream');
-    const [name,     setName]     = useState(editProvider?.name     ?? 'HS');
-    const [url,      setUrl]      = useState(editProvider?.url      ?? 'http://albasera-tv.net:80');
-    const [username, setUsername] = useState(editProvider?.username ?? 'HS');
-    const [password, setPassword] = useState(editProvider?.password ?? 'HS');
+    const [name,     setName]     = useState(editProvider?.name     ?? '');
+    const [url,      setUrl]      = useState(editProvider?.url      ?? '');
+    const [username, setUsername] = useState(editProvider?.username ?? '');
+    const [password, setPassword] = useState(editProvider?.password ?? '');
     const [showPass, setShowPass] = useState(false);
 
     useEffect(() => {
@@ -236,12 +236,16 @@ export default function AddProviderScreen() {
             username: username.trim(),
             password: password.trim(),
         };
-        if (isEditMode && editProvider) {
-            await updateProvider(editProvider.id, data);
-        } else {
-            await addProvider(data);
+        try {
+            if (isEditMode && editProvider) {
+                await updateProvider(editProvider.id, data);
+            } else {
+                await addProvider(data);
+            }
+            router.back();
+        } catch {
+            Alert.alert(t.login.saveFailed, t.login.saveFailedMsg);
         }
-        router.back();
     };
 
     const pickLocalFile = async () => {
