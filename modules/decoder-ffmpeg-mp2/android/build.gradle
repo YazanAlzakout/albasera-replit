@@ -26,6 +26,16 @@ android {
     defaultConfig {
         minSdkVersion 24
         targetSdkVersion 35
+
+        // The vendored FFmpeg static libs (jni/ffmpeg/android-libs/) were only
+        // built for the two ABIs real Android phones/TV boxes actually use -
+        // armeabi-v7a and arm64-v8a. x86/x86_64 (emulator-only) have no built
+        // libs, so CMake fails there with a hard "missing and no known rule to
+        // make it" error unless this module's own native build is scoped down
+        // to match, even though the app as a whole still targets all 4 ABIs.
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
     }
 
     if (project.file('src/main/jni/ffmpeg').exists()) {
