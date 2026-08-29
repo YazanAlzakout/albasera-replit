@@ -28,16 +28,7 @@ android {
         targetSdkVersion 35
     }
 
-    // Temporary build-time diagnostics: the native CMake build silently never
-    // activated on a real EAS build even though the vendored FFmpeg source
-    // exists in the committed repo - printing what Gradle actually sees here
-    // resolves whether this is a path/projectDir problem or something else,
-    // without needing repo-admin access to read raw Gradle logs otherwise.
-    println "[decoder-ffmpeg-mp2] project.projectDir = ${project.projectDir}"
-    println "[decoder-ffmpeg-mp2] project.file('src/main/jni/ffmpeg') = ${project.file('src/main/jni/ffmpeg')}"
-    println "[decoder-ffmpeg-mp2] .exists() = ${project.file('src/main/jni/ffmpeg').exists()}"
     if (project.file('src/main/jni/ffmpeg').exists()) {
-        println "[decoder-ffmpeg-mp2] CMakeLists.txt exists = ${project.file('src/main/jni/CMakeLists.txt').exists()}"
         externalNativeBuild.cmake.path = 'src/main/jni/CMakeLists.txt'
         externalNativeBuild.cmake.version = '3.21.0+'
     }
