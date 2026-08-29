@@ -108,7 +108,17 @@ jobs:
           trap 'echo "=== ffbuild/config.log (tail) ==="; tail -n 100 ffbuild/config.log 2>/dev/null || tail -n 100 ffmpeg-src/ffbuild/config.log 2>/dev/null || echo "(no config.log found)"' ERR
           HOST_PLATFORM="linux-x86_64"
           JOBS="$(nproc)"
-          ENABLED_DECODERS=(mp2)
+          # Media3's own FfmpegLibrary.getCodecName() maps AUDIO_MPEG,
+          # AUDIO_MPEG_L1, *and* AUDIO_MPEG_L2 (MP2) all to the FFmpeg decoder
+          # name "mp3" - confirmed by reading ffmpeg_jni.cc's getCodecByName(),
+          # which both ffmpegHasDecoder() and the real ffmpegInitialize() call
+          # via avcodec_find_decoder_by_name(). FFmpeg's decoder registered
+          # under that name is a generic MPEG-audio decoder that handles all
+          # three layers - but only the exact registered name is looked up, so
+          # building "mp2" (a real but differently-named FFmpeg decoder entry)
+          # left avcodec_find_decoder_by_name("mp3") returning NULL, which is
+          # why MP2 playback silently reported "unsupported" end-to-end.
+          ENABLED_DECODERS=(mp3)
 
           COMMON_OPTIONS="
               --target-os=android
