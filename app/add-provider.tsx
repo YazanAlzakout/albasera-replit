@@ -23,6 +23,7 @@ import {
     UIManager,
     View,
 } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const isTV = Platform.isTV;
@@ -272,11 +273,14 @@ export default function AddProviderScreen() {
                 <TVColumn style={styles.column}>
 
                     {/* ── Header ───────────────────────────────────────────── */}
-                    <View style={[
-                        styles.header,
-                        { paddingHorizontal: tv(16, TVSafe.paddingHorizontal) },
-                        isRTL && styles.rowReverse,
-                    ]}>
+                    <Animated.View
+                        entering={FadeIn.delay(200).duration(600)}
+                        style={[
+                            styles.header,
+                            { paddingHorizontal: tv(16, TVSafe.paddingHorizontal) },
+                            isRTL && styles.rowReverse,
+                        ]}
+                    >
                         <TVPressable
                             onPress={() => router.back()}
                             style={[styles.iconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
@@ -303,7 +307,7 @@ export default function AddProviderScreen() {
 
                         {/* Spacer mirrors back button width */}
                         <View style={styles.iconBtn} />
-                    </View>
+                    </Animated.View>
 
                     {/* ── Body ─────────────────────────────────────────────────
                         - KeyboardAvoidingView معطل على TV (enabled={!isTV})
@@ -359,81 +363,91 @@ export default function AddProviderScreen() {
                                 {/* Fields */}
                                 <View style={styles.fields}>
 
-                                    <Field
-                                        ref={nameRef}
-                                        {...fieldProps}
-                                        icon="bookmark-outline"
-                                        label={t.login.nameLabel}
-                                        value={name}
-                                        onChangeText={setName}
-                                        placeholder={t.login.namePlaceholder}
-                                        onSubmitEditing={() => urlRef.current?.focus()}
-                                        onFocusScroll={() => scrollToRef(nameRef)}
-                                    />
+                                    <Animated.View entering={FadeInDown.delay(0).duration(400).springify()}>
+                                        <Field
+                                            ref={nameRef}
+                                            {...fieldProps}
+                                            icon="bookmark-outline"
+                                            label={t.login.nameLabel}
+                                            value={name}
+                                            onChangeText={setName}
+                                            placeholder={t.login.namePlaceholder}
+                                            onSubmitEditing={() => urlRef.current?.focus()}
+                                            onFocusScroll={() => scrollToRef(nameRef)}
+                                        />
+                                    </Animated.View>
 
                                     {type === 'xtream' && (<>
-                                        <Field
-                                            ref={urlRef}
-                                            {...fieldProps}
-                                            icon="globe-outline"
-                                            label={t.login.urlLabel}
-                                            value={url}
-                                            onChangeText={setUrl}
-                                            placeholder={t.login.urlPlaceholder}
-                                            keyboardType="url"
-                                            onSubmitEditing={() => usernameRef.current?.focus()}
-                                            onFocusScroll={() => scrollToRef(urlRef)}
-                                        />
-                                        <Field
-                                            ref={usernameRef}
-                                            {...fieldProps}
-                                            icon="person-outline"
-                                            label={t.login.usernameLabel}
-                                            value={username}
-                                            onChangeText={setUsername}
-                                            placeholder={t.login.usernamePlaceholder}
-                                            onSubmitEditing={() => passwordRef.current?.focus()}
-                                            onFocusScroll={() => scrollToRef(usernameRef)}
-                                        />
+                                        <Animated.View entering={FadeInDown.delay(60).duration(400).springify()}>
+                                            <Field
+                                                ref={urlRef}
+                                                {...fieldProps}
+                                                icon="globe-outline"
+                                                label={t.login.urlLabel}
+                                                value={url}
+                                                onChangeText={setUrl}
+                                                placeholder={t.login.urlPlaceholder}
+                                                keyboardType="url"
+                                                onSubmitEditing={() => usernameRef.current?.focus()}
+                                                onFocusScroll={() => scrollToRef(urlRef)}
+                                            />
+                                        </Animated.View>
+                                        <Animated.View entering={FadeInDown.delay(120).duration(400).springify()}>
+                                            <Field
+                                                ref={usernameRef}
+                                                {...fieldProps}
+                                                icon="person-outline"
+                                                label={t.login.usernameLabel}
+                                                value={username}
+                                                onChangeText={setUsername}
+                                                placeholder={t.login.usernamePlaceholder}
+                                                onSubmitEditing={() => passwordRef.current?.focus()}
+                                                onFocusScroll={() => scrollToRef(usernameRef)}
+                                            />
+                                        </Animated.View>
                                         {/*
                                             password هو آخر field —
                                             scrollToEnd أبسط وأضمن من measureLayout
                                             لأن TV_BOTTOM_PADDING يضمن وجود مساحة كافية
                                         */}
-                                        <Field
-                                            ref={passwordRef}
-                                            {...fieldProps}
-                                            icon="lock-closed-outline"
-                                            label={t.login.passwordLabel}
-                                            value={password}
-                                            onChangeText={setPassword}
-                                            placeholder={t.login.passwordPlaceholder}
-                                            secure
-                                            returnKeyType="done"
-                                            onSubmitEditing={handleSave}
-                                            onFocusScroll={() => scrollRef.current?.scrollToEnd({ animated: true })}
-                                        />
+                                        <Animated.View entering={FadeInDown.delay(180).duration(400).springify()}>
+                                            <Field
+                                                ref={passwordRef}
+                                                {...fieldProps}
+                                                icon="lock-closed-outline"
+                                                label={t.login.passwordLabel}
+                                                value={password}
+                                                onChangeText={setPassword}
+                                                placeholder={t.login.passwordPlaceholder}
+                                                secure
+                                                returnKeyType="done"
+                                                onSubmitEditing={handleSave}
+                                                onFocusScroll={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                                            />
+                                        </Animated.View>
                                     </>)}
 
                                     {type === 'm3u' && (
                                         // m3u URL هو آخر field أيضاً — نفس المعاملة
-                                        <Field
-                                            ref={urlRef}
-                                            {...fieldProps}
-                                            icon="link-outline"
-                                            label="M3U URL"
-                                            value={url}
-                                            onChangeText={setUrl}
-                                            placeholder="http://example.com/playlist.m3u"
-                                            keyboardType="url"
-                                            returnKeyType="done"
-                                            onSubmitEditing={handleSave}
-                                            onFocusScroll={() => scrollRef.current?.scrollToEnd({ animated: true })}
-                                        />
+                                        <Animated.View entering={FadeInDown.delay(60).duration(400).springify()}>
+                                            <Field
+                                                ref={urlRef}
+                                                {...fieldProps}
+                                                icon="link-outline"
+                                                label="M3U URL"
+                                                value={url}
+                                                onChangeText={setUrl}
+                                                placeholder="http://example.com/playlist.m3u"
+                                                keyboardType="url"
+                                                returnKeyType="done"
+                                                onSubmitEditing={handleSave}
+                                                onFocusScroll={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                                            />
+                                        </Animated.View>
                                     )}
 
                                     {type === 'local' && (
-                                        <View style={styles.fieldWrap}>
+                                        <Animated.View entering={FadeInDown.delay(60).duration(400).springify()} style={styles.fieldWrap}>
                                             <Text style={[styles.fieldLabel, { color: textColor, textAlign, fontFamily: FontFamily.medium }]}>
                                                 File
                                             </Text>
@@ -449,7 +463,7 @@ export default function AddProviderScreen() {
                                                     {url ? url.split('/').pop() : 'Select M3U File...'}
                                                 </Text>
                                             </TVPressable>
-                                        </View>
+                                        </Animated.View>
                                     )}
                                 </View>
                             </View>
@@ -492,25 +506,27 @@ export default function AddProviderScreen() {
                             )}
 
                             {/* ── Save Button ───────────────────────────────── */}
-                            <TVPressable
-                                style={[styles.saveBtn, (!isAccepted || legalLoading) && { opacity: 0.7 }]}
-                                onPress={handleSave}
-                            >
-                                <LinearGradient
-                                    colors={[Brand.primary, Brand.primaryDark]}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                    style={StyleSheet.absoluteFill}
-                                />
-                                <Ionicons
-                                    name={isEditMode ? 'save-outline' : 'checkmark-circle-outline'}
-                                    size={tv(18, 22)}
-                                    color="#fff"
-                                    style={{ marginRight: 8 }}
-                                />
-                                <Text style={[styles.saveBtnText, { fontFamily: FontFamily.extraBold }]}>
-                                    {isEditMode ? (isRTL ? 'حفظ التغييرات' : 'Save Changes') : t.login.saveProvider}
-                                </Text>
-                            </TVPressable>
+                            <Animated.View entering={FadeInUp.delay(400).duration(700).springify()}>
+                                <TVPressable
+                                    style={[styles.saveBtn, (!isAccepted || legalLoading) && { opacity: 0.7 }]}
+                                    onPress={handleSave}
+                                >
+                                    <LinearGradient
+                                        colors={[Brand.primary, Brand.primaryDark]}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                        style={StyleSheet.absoluteFill}
+                                    />
+                                    <Ionicons
+                                        name={isEditMode ? 'save-outline' : 'checkmark-circle-outline'}
+                                        size={tv(18, 22)}
+                                        color="#fff"
+                                        style={{ marginRight: 8 }}
+                                    />
+                                    <Text style={[styles.saveBtnText, { fontFamily: FontFamily.extraBold }]}>
+                                        {isEditMode ? (isRTL ? 'حفظ التغييرات' : 'Save Changes') : t.login.saveProvider}
+                                    </Text>
+                                </TVPressable>
+                            </Animated.View>
 
                         </ScrollView>
                     </KeyboardAvoidingView>
