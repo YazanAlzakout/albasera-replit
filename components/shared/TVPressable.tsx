@@ -1,7 +1,13 @@
 import { Brand, TVFocus } from '@/constants/theme';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { SpatialNavigationFocusableView } from 'react-tv-space-navigation';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+// Focus-ring fade duration for both TV branches below - kept short since this
+// fires on every D-pad move, not a one-time entrance.
+const FOCUS_FADE_MS = 120;
 
 const isTV = Platform.isTV;
 const isNativeTV = isTV && Platform.OS !== 'web';
@@ -36,13 +42,41 @@ export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVP
     accessibilityRole = 'button',
     ...rest
 }, ref) {
-    // ─── Mobile / non-TV: plain Pressable ────────────────────────────────────
+    // ─── Mobile / non-TV: plain Pressable with press-scale feedback ──────────
+    // `style` stays on this exact element (never moved to a wrapper) so every
+    // existing caller's flex/sizing assumptions are unaffected - only an
+    // animated `transform` is layered on top via AnimatedPressable.
+    const pressScale = useSharedValue(1);
+    const pressAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: pressScale.value }],
+    }));
+
+    // Shared by both TV branches below: the focus ring/style stays mounted at
+    // all times and only its opacity animates, so focus moves fade instead of
+    // snapping. No transform is ever applied here - the TV focus system is
+    // deliberately border/opacity-only so the D-pad highlight never shifts
+    // layout or scales content.
+    const focusOpacity = useSharedValue(0);
+    const focusAnimatedStyle = useAnimatedStyle(() => ({
+        opacity: focusOpacity.value,
+    }));
+    const handleTVFocus: NonNullable<PressableProps['onFocus']> = (e) => {
+        focusOpacity.value = withTiming(1, { duration: FOCUS_FADE_MS });
+        onFocusProp?.(e);
+    };
+    const handleTVBlur: NonNullable<PressableProps['onBlur']> = (e) => {
+        focusOpacity.value = withTiming(0, { duration: FOCUS_FADE_MS });
+        onBlurProp?.(e);
+    };
+
     if (!isTV) {
         return (
-            <Pressable
+            <AnimatedPressable
                 ref={ref}
-                style={style}
+                style={[style, pressAnimatedStyle]}
                 onPress={onPress}
+                onPressIn={() => { pressScale.value = withSpring(0.95, { damping: 12 }); }}
+                onPressOut={() => { pressScale.value = withSpring(1); }}
                 onFocus={onFocusProp}
                 onBlur={onBlurProp}
                 hitSlop={hitSlop}
@@ -51,7 +85,7 @@ export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVP
                 {...rest}
             >
                 {children}
-            </Pressable>
+            </AnimatedPressable>
         );
     }
 
@@ -69,37 +103,35 @@ export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVP
                 ref={ref}
                 hasTVPreferredFocus={hasTVPreferredFocus}
                 onPress={onPress}
-                onFocus={onFocusProp}
-                onBlur={onBlurProp}
+                onFocus={handleTVFocus}
+                onBlur={handleTVBlur}
                 hitSlop={hitSlop}
                 disabled={disabled}
                 accessibilityRole={accessibilityRole}
                 style={style}
                 {...rest}
             >
-                {({ focused }: { focused: boolean }) => (
-                    <>
-                        {children}
-                        {focused && (
-                            <View
-                                pointerEvents="none"
-                                style={[
-                                    StyleSheet.absoluteFill,
-                                    focusStyle ?? {
-                                        borderWidth: bw + 0.5,
-                                        borderColor: Brand.focus,
-                                        borderRadius,
-                                    },
-                                ]}
-                            />
-                        )}
-                    </>
-                )}
+                {children}
+                <Animated.View
+                    pointerEvents="none"
+                    style={[
+                        StyleSheet.absoluteFill,
+                        focusStyle ?? {
+                            borderWidth: bw + 0.5,
+                            borderColor: Brand.focus,
+                            borderRadius,
+                        },
+                        focusAnimatedStyle,
+                    ]}
+                />
             </Pressable>
         );
     }
 
     // ─── Web TV: SpatialNavigationFocusableView for keyboard/remote support ──
+    // Same fade-not-snap treatment as native TV above: the focus style is its
+    // own always-mounted overlay with animated opacity, kept separate from the
+    // content box so the fade never dims `children` itself.
     return (
         <SpatialNavigationFocusableView
             onSelect={() => {
@@ -108,27 +140,29 @@ export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVP
                 }
             }}
             onFocus={() => {
+                focusOpacity.value = withTiming(1, { duration: FOCUS_FADE_MS });
                 if (typeof onFocusProp === 'function') {
                     (onFocusProp as () => void)();
                 }
             }}
             onBlur={() => {
+                focusOpacity.value = withTiming(0, { duration: FOCUS_FADE_MS });
                 if (typeof onBlurProp === 'function') {
                     (onBlurProp as () => void)();
                 }
             }}
         >
-            {({ isFocused }) => (
+            {() => (
                 <View
-                    style={[
-                        style as ViewStyle,
-                        disabled && localStyles.disabled,
-                        isFocused && (focusStyle || TVFocus[focusVariant]),
-                    ]}
+                    style={[style as ViewStyle, disabled && localStyles.disabled]}
                     accessibilityRole={accessibilityRole}
                     accessibilityState={{ disabled: Boolean(disabled) }}
                 >
                     {children}
+                    <Animated.View
+                        pointerEvents="none"
+                        style={[StyleSheet.absoluteFill, focusStyle || TVFocus[focusVariant], focusAnimatedStyle]}
+                    />
                 </View>
             )}
         </SpatialNavigationFocusableView>
