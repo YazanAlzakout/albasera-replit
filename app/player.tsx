@@ -19,7 +19,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     useTVEventHandler as _useTVEventHandler,
     ActivityIndicator,
-    Animated,
     FlatList,
     findNodeHandle,
     Platform,
@@ -28,6 +27,23 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import Animated, {
+    cancelAnimation,
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    interpolateColor,
+    SlideInLeft,
+    SlideInRight,
+    SlideOutLeft,
+    SlideOutRight,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
 
 const SKIP_SECONDS = 60; // تقديم 60 ثانية 
 const TV_SEEK_STEP = 60; // 60 ثانية لكل ضغطة على التلفزيون
@@ -96,16 +112,39 @@ const ChannelListItem = React.memo(({
 }) => {
     const handlePress = useCallback(() => onPressItem(item), [onPressItem, item]);
 
+    // Cross-fade the active-channel highlight instead of an instant style
+    // swap. Deliberately NOT an `entering=`/`exiting=` animation - this is a
+    // FlatList row, and entering animations firing on every row that mounts
+    // while scrolling (rather than just on selection) was the exact anti-
+    // pattern removed elsewhere in this app earlier today. `activeProgress`
+    // only moves when `isActive` itself changes, never on mount/scroll.
+    const activeProgress = useSharedValue(isActive ? 1 : 0);
+    useEffect(() => {
+        activeProgress.value = withTiming(isActive ? 1 : 0, { duration: 150 });
+    }, [isActive]);
+    const rowAnimatedStyle = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(activeProgress.value, [0, 1], ['transparent', 'rgba(229,9,20,0.15)']),
+        borderColor: interpolateColor(activeProgress.value, [0, 1], ['transparent', 'rgba(229,9,20,0.65)']),
+    }));
+    const numberAnimatedStyle = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(activeProgress.value, [0, 1], ['rgba(255,255,255,0.08)', Brand.primary]),
+    }));
+
     return (
         <TVPressable
             onPress={handlePress}
             hasTVPreferredFocus={hasTVPreferredFocus}
             focusVariant="card"
-            style={[styles.channelListItem, isActive && styles.channelListItemActive, isRTL && styles.rowRTL]}
+            style={[styles.channelListItem, isRTL && styles.rowRTL]}
         >
-            <View style={[styles.channelNumber, isActive && styles.channelNumberActive]}>
+            {/* TVPressable's own `style` isn't guaranteed to be an Animated
+                component on every platform branch, so the animated highlight
+                is its own always-mounted overlay here instead - same pattern
+                as TVPressable's own focus ring. */}
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.channelListItemHighlight, rowAnimatedStyle]} />
+            <Animated.View style={[styles.channelNumber, numberAnimatedStyle]}>
                 <ThemedText style={styles.channelNumberText}>{index + 1}</ThemedText>
-            </View>
+            </Animated.View>
             <View style={styles.channelListText}>
                 <ThemedText style={[styles.channelName, isRTL && styles.textRTL]} numberOfLines={1}>
                     {item.name || `${isRTL ? 'قناة' : 'Channel'} ${index + 1}`}
@@ -200,9 +239,19 @@ export default function PlayerScreen() {
     const resumeAppliedRef = useRef(false);
     const videoViewRef = useRef<any>(null);
 
-    const controlsOpacity = useRef(new Animated.Value(1)).current;
-    const livePulseAnim = useRef(new Animated.Value(1)).current;
-    const nextEpSlide = useRef(new Animated.Value(300)).current;
+    // Migrated from React Native's core Animated to reanimated, matching every
+    // other animated screen in the app (dashboard/details/login/settings/tab
+    // bar all use reanimated already - this was the one file still on the old
+    // API).
+    const controlsOpacity = useSharedValue(1);
+    const livePulseAnim = useSharedValue(1);
+    // nextEpSlide is pre-existing: computed and animated (see the
+    // showNextEpisode effect below) but not currently consumed by any
+    // rendered element - kept as-is for behavior parity, not introduced or
+    // removed by this pass.
+    const nextEpSlide = useSharedValue(300);
+    const controlsAnimatedStyle = useAnimatedStyle(() => ({ opacity: controlsOpacity.value }));
+    const liveDotAnimatedStyle = useAnimatedStyle(() => ({ opacity: livePulseAnim.value }));
 
     const webPlayerRef = useRef<WebVideoPlayerRef>(null);
     const webUiUpdateRef = useRef(0);
@@ -324,11 +373,7 @@ export default function PlayerScreen() {
             setActiveFocus('play');
         }
         setShowControls(show);
-        Animated.timing(controlsOpacity, {
-            toValue: show ? 1 : 0,
-            duration: 250,
-            useNativeDriver: true,
-        }).start();
+        controlsOpacity.value = withTiming(show ? 1 : 0, { duration: 250 });
     }, [controlsOpacity]);
 
     const startControlsTimer = useCallback(() => {
@@ -509,14 +554,14 @@ export default function PlayerScreen() {
 
     useEffect(() => {
         if (type !== 'live') return;
-        const pulse = Animated.loop(
-            Animated.sequence([
-                Animated.timing(livePulseAnim, { toValue: 0.2, duration: 900, useNativeDriver: true }),
-                Animated.timing(livePulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-            ]),
+        livePulseAnim.value = withRepeat(
+            withSequence(
+                withTiming(0.2, { duration: 900 }),
+                withTiming(1, { duration: 900 }),
+            ),
+            -1,
         );
-        pulse.start();
-        return () => pulse.stop();
+        return () => { cancelAnimation(livePulseAnim); };
     }, []);
 
     const tryNextFallback = useCallback(() => {
@@ -823,12 +868,7 @@ export default function PlayerScreen() {
     const showNextEpisode = type === 'series' && nextEpisodeId && nextEpisodeName && showProgress && duration > 0 && (duration - currentTime) < 20;
 
     useEffect(() => {
-        Animated.spring(nextEpSlide, {
-            toValue: showNextEpisode ? 0 : 300,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 9,
-        }).start();
+        nextEpSlide.value = withSpring(showNextEpisode ? 0 : 300, { damping: 16, stiffness: 120 });
     }, [showNextEpisode]);
 
     const isLoading = playerStatus === 'loading';
@@ -975,7 +1015,7 @@ export default function PlayerScreen() {
             >
                     {!isError && (
                         <Animated.View
-                            style={[StyleSheet.absoluteFill, { opacity: controlsOpacity }]}
+                            style={[StyleSheet.absoluteFill, controlsAnimatedStyle]}
                             pointerEvents={showControls ? 'box-none' : 'none'}
                         >
                         <LinearGradient
@@ -1107,7 +1147,7 @@ export default function PlayerScreen() {
                             {type === 'live' && (
                                 <View style={[styles.liveRow, isRTL && styles.rowRTL]}>
                                     <View style={styles.liveBadge}>
-                                        <Animated.View style={[styles.liveDot, { opacity: livePulseAnim }]} />
+                                        <Animated.View style={[styles.liveDot, liveDotAnimatedStyle]} />
                                         <ThemedText style={styles.liveText}>{t.player.live}</ThemedText>
                                     </View>
                                     {audioDiagnostic && (
@@ -1260,13 +1300,21 @@ export default function PlayerScreen() {
                         </LinearGradient>
 
                         {showSpeedMenu && (
-                            <View style={[styles.menuCard, isRTL && styles.menuCardRTL]}>
+                            <Animated.View
+                                entering={FadeIn.duration(150)}
+                                exiting={FadeOut.duration(120)}
+                                style={[styles.menuCard, isRTL && styles.menuCardRTL]}
+                            >
                                 {speedMenuItems}
-                            </View>
+                            </Animated.View>
                         )}
 
                         {showSubtitleMenu && (
-                            <View style={[styles.menuCard, isRTL && styles.menuCardRTL]}>
+                            <Animated.View
+                                entering={FadeIn.duration(150)}
+                                exiting={FadeOut.duration(120)}
+                                style={[styles.menuCard, isRTL && styles.menuCardRTL]}
+                            >
                                 <TVPressable
                                     style={[styles.menuItem, !selectedSubtitleTrack && styles.menuItemActive]}
                                     onPress={() => handleSubtitleSelect(null)}
@@ -1301,11 +1349,15 @@ export default function PlayerScreen() {
                                         );
                                     },
                                 )}
-                            </View>
+                            </Animated.View>
                         )}
 
                         {showAudioMenu && (
-                            <View style={[styles.menuCard, styles.audioMenuCard, isRTL && styles.menuCardRTL]}>
+                            <Animated.View
+                                entering={FadeIn.duration(150)}
+                                exiting={FadeOut.duration(120)}
+                                style={[styles.menuCard, styles.audioMenuCard, isRTL && styles.menuCardRTL]}
+                            >
                                 {availableAudioTracks.map((track, idx) => {
                                     const isActive = selectedAudioTrack?.id
                                         ? selectedAudioTrack.id === track.id
@@ -1326,11 +1378,15 @@ export default function PlayerScreen() {
                                         </TVPressable>
                                     );
                                 })}
-                            </View>
+                            </Animated.View>
                         )}
 
                         {!isTV && showVolumeSlider && (
-                            <View style={[styles.volumeContainer, isRTL && styles.volumeContainerRTL]}>
+                            <Animated.View
+                                entering={FadeIn.duration(150)}
+                                exiting={FadeOut.duration(120)}
+                                style={[styles.volumeContainer, isRTL && styles.volumeContainerRTL]}
+                            >
                                 <ThemedText style={styles.volumePercent}>{Math.round(volume * 100)}%</ThemedText>
                                 <Ionicons name="volume-high" size={14} color="rgba(255,255,255,0.6)" />
                                 <View style={styles.volumeSliderWrap}>
@@ -1347,14 +1403,18 @@ export default function PlayerScreen() {
                                     />
                                 </View>
                                 <Ionicons name="volume-mute" size={14} color="rgba(255,255,255,0.6)" />
-                            </View>
+                            </Animated.View>
                         )}
                         </Animated.View>
                     )}
             </TVPressable>
 
             {isLive && showChannelGuide && (
-                <View style={[styles.channelGuide, isRTL ? styles.channelGuideRTL : styles.channelGuideLTR]}>
+                <Animated.View
+                    entering={(isRTL ? SlideInLeft : SlideInRight).duration(280)}
+                    exiting={(isRTL ? SlideOutLeft : SlideOutRight).duration(220)}
+                    style={[styles.channelGuide, isRTL ? styles.channelGuideRTL : styles.channelGuideLTR]}
+                >
                     <View style={[styles.channelGuideHeader, isRTL && styles.rowRTL]}>
                         <View style={styles.channelGuideTitleWrap}>
                             <ThemedText style={[styles.channelGuideTitle, isRTL && styles.textRTL]}>
@@ -1427,7 +1487,7 @@ export default function PlayerScreen() {
                         }}
                         renderItem={renderChannelItem}
                     />
-                </View>
+                </Animated.View>
             )}
 
             {isLocked && (
@@ -1439,19 +1499,27 @@ export default function PlayerScreen() {
             )}
 
             {isLoading && (
-                <View style={styles.loadingOverlay}>
+                <Animated.View
+                    entering={FadeIn.duration(180)}
+                    exiting={FadeOut.duration(150)}
+                    style={styles.loadingOverlay}
+                >
                     <View style={styles.loadingCard}>
                         <View style={styles.spinnerRing}>
                             <ActivityIndicator size="large" color={Brand.primary} />
                         </View>
                         <ThemedText style={styles.loadingText}>{t.player.loading}</ThemedText>
                     </View>
-                </View>
+                </Animated.View>
             )}
 
             {isError && (
-                <View style={styles.errorOverlay}>
-                    <View style={styles.errorCard}>
+                <Animated.View
+                    entering={FadeIn.duration(180)}
+                    exiting={FadeOut.duration(150)}
+                    style={styles.errorOverlay}
+                >
+                    <Animated.View entering={FadeInDown.duration(250)} style={styles.errorCard}>
                         <View style={styles.errorIconWrap}>
                             <Ionicons name="alert-circle" size={44} color={Brand.primary} />
                         </View>
@@ -1473,8 +1541,8 @@ export default function PlayerScreen() {
                             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={16} color="rgba(255,255,255,0.6)" />
                             <ThemedText style={styles.backBtnText}>{t.player.back}</ThemedText>
                         </TVPressable>
-                    </View>
-                </View>
+                    </Animated.View>
+                </Animated.View>
             )}
         </View>
     );
@@ -1535,9 +1603,11 @@ const styles = StyleSheet.create({
     channelGuideScopeToggleText: { color: Brand.primary, fontSize: 12, fontWeight: '600' },
     channelListContent: { paddingHorizontal: 10, paddingBottom: 24 },
     channelListItem: { minHeight: isTV ? 62 : 54, borderRadius: 12, paddingHorizontal: 10, marginBottom: 5, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: 'transparent' },
-    channelListItemActive: { backgroundColor: 'rgba(229,9,20,0.15)', borderColor: 'rgba(229,9,20,0.65)' },
+    // Shape-only (no margin/padding/flex) - this backs an absolutely
+    // positioned overlay that cross-fades the active-row highlight, so it
+    // must not carry any layout properties that would fight `absoluteFill`.
+    channelListItemHighlight: { borderRadius: 12, borderWidth: 1 },
     channelNumber: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
-    channelNumberActive: { backgroundColor: Brand.primary },
     channelNumberText: { color: '#fff', fontSize: 11, fontWeight: '800' },
     channelListText: { flex: 1 },
     channelName: { color: '#fff', fontSize: isTV ? 15 : 13, fontWeight: '700' },
