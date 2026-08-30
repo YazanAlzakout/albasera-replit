@@ -25,7 +25,6 @@ import {
 } from 'react-native';
 import Animated, {
     FadeIn,
-    FadeInDown,
     useAnimatedStyle,
     useSharedValue,
     withSpring,
@@ -69,7 +68,7 @@ const ItemCard = React.memo(function ItemCard({
     const handleRemove = useCallback(() => onRemoveItem(item), [item, onRemoveItem]);
 
     return (
-        <Animated.View entering={FadeInDown.duration(400)} style={{ width: CARD_W, marginBottom: GAP }}>
+        <View style={{ width: CARD_W, marginBottom: GAP }}>
             <Animated.View style={scaleStyle}>
                 <TVPressable onPress={handlePress} style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
                     {/* Poster */}
@@ -108,7 +107,7 @@ const ItemCard = React.memo(function ItemCard({
                     )}
                 </TVPressable>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
 });
 

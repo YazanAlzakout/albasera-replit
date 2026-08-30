@@ -44,7 +44,6 @@ import {
 import Animated, {
     FadeIn,
     FadeInDown,
-    FadeInRight,
     useAnimatedStyle,
     useSharedValue,
     withRepeat,
@@ -143,10 +142,7 @@ const PosterCard = React.memo(({
     }, [onPressItem, item]);
 
     return (
-        <Animated.View
-            entering={FadeInDown.duration(280).delay(Math.min(index * 30, 300))}
-            style={{ width: cardW }}
-        >
+        <View style={{ width: cardW }}>
             <Animated.View style={aStyle}>
                 <TVPressable onPress={handlePress} hasTVPreferredFocus={preferredFocus} style={styles.posterShell}>
                     <View style={[styles.posterImg, { width: cardW, height: cardH, backgroundColor: isDark ? '#0A0A14' : '#DDDDF0' }]}>
@@ -194,7 +190,7 @@ const PosterCard = React.memo(({
                     </View>
                 </TVPressable>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
 });
 
@@ -228,9 +224,7 @@ const LiveItem = React.memo(({
     const catCol = isDark ? 'rgba(255,255,255,0.38)' : 'rgba(0,0,0,0.38)';
 
     return (
-        <Animated.View
-            entering={FadeInRight.duration(220).delay(Math.min(index * 20, 240))}
-        >
+        <View>
             <Animated.View style={aStyle}>
                 <TVPressable
                     onPress={handlePress}
@@ -262,7 +256,7 @@ const LiveItem = React.memo(({
                     </View>
                 </TVPressable>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
 });
 
@@ -293,7 +287,7 @@ const LiveIconCard = React.memo(({
     }, [onPressItem, item]);
 
     return (
-        <Animated.View entering={FadeInDown.duration(240).delay(Math.min(index * 25, 260))} style={{ width: cardW }}>
+        <View style={{ width: cardW }}>
             <Animated.View style={aStyle}>
                 <TVPressable
                     onPress={handlePress}
@@ -346,7 +340,7 @@ const LiveIconCard = React.memo(({
                     )}
                 </TVPressable>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
 });
 
