@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type LockType = 'live' | 'movie' | 'series';
@@ -64,7 +65,7 @@ export default function ContentLockScreen() {
     return (
         <View style={[styles.root, { backgroundColor: bg }]}>
             <SafeAreaView style={styles.safe}>
-                <View style={[styles.header, isRTL && styles.rowReverse]}>
+                <Animated.View entering={FadeIn.duration(500)} style={[styles.header, isRTL && styles.rowReverse]}>
                     <TVPressable onPress={() => router.back()} style={styles.backBtn} focusVariant="control">
                         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color={textC} />
                     </TVPressable>
@@ -75,9 +76,12 @@ export default function ContentLockScreen() {
                         </Text>
                     </View>
                     <View style={{ width: 36 }} />
-                </View>
+                </Animated.View>
 
-                <View style={[styles.searchWrap, { backgroundColor: cardBg, borderColor: border }]}>
+                <Animated.View
+                    entering={FadeInDown.delay(60).duration(400)}
+                    style={[styles.searchWrap, { backgroundColor: cardBg, borderColor: border }]}
+                >
                     <Ionicons name="search-outline" size={18} color={subC} />
                     <TextInput
                         style={[styles.searchInput, { color: textC, fontFamily: FontFamily.regular, textAlign: isRTL ? 'right' : 'left' }]}
@@ -86,7 +90,7 @@ export default function ContentLockScreen() {
                         placeholder={isRTL ? 'بحث...' : 'Search...'}
                         placeholderTextColor={subC}
                     />
-                </View>
+                </Animated.View>
 
                 {loading ? (
                     <View style={styles.center}>
@@ -94,30 +98,34 @@ export default function ContentLockScreen() {
                     </View>
                 ) : (
                     <ScrollView contentContainerStyle={styles.list}>
-                        {filtered.map((entry) => {
+                        {filtered.map((entry, idx) => {
                             const isHidden = hiddenCategories[lockType].includes(entry.id);
                             const onPress = () => {
                                 void toggleHiddenCategory(lockType, entry.id);
                             };
 
                             return (
-                                <TVPressable
+                                <Animated.View
                                     key={entry.id}
-                                    onPress={onPress}
-                                    style={[styles.row, { backgroundColor: cardBg, borderColor: border }]}
-                                    focusVariant="card"
+                                    entering={FadeInDown.delay(Math.min(idx, 15) * 30).duration(350).springify()}
                                 >
-                                    <View style={styles.rowInfo}>
-                                        <Text style={[styles.rowTitle, { color: textC, fontFamily: FontFamily.medium }]} numberOfLines={1}>
-                                            {entry.name}
-                                        </Text>
-                                    </View>
-                                    <View style={[styles.badge, { backgroundColor: isHidden ? '#ef444420' : '#22c55e20' }]}>
-                                        <Text style={[styles.badgeText, { color: isHidden ? '#ef4444' : '#22c55e', fontFamily: FontFamily.bold }]}>
-                                            {isHidden ? (isRTL ? 'مخفي' : 'Hidden') : (isRTL ? 'ظاهر' : 'Visible')}
-                                        </Text>
-                                    </View>
-                                </TVPressable>
+                                    <TVPressable
+                                        onPress={onPress}
+                                        style={[styles.row, { backgroundColor: cardBg, borderColor: border }]}
+                                        focusVariant="card"
+                                    >
+                                        <View style={styles.rowInfo}>
+                                            <Text style={[styles.rowTitle, { color: textC, fontFamily: FontFamily.medium }]} numberOfLines={1}>
+                                                {entry.name}
+                                            </Text>
+                                        </View>
+                                        <View style={[styles.badge, { backgroundColor: isHidden ? '#ef444420' : '#22c55e20' }]}>
+                                            <Text style={[styles.badgeText, { color: isHidden ? '#ef4444' : '#22c55e', fontFamily: FontFamily.bold }]}>
+                                                {isHidden ? (isRTL ? 'مخفي' : 'Hidden') : (isRTL ? 'ظاهر' : 'Visible')}
+                                            </Text>
+                                        </View>
+                                    </TVPressable>
+                                </Animated.View>
                             );
                         })}
                         {filtered.length === 0 && (
