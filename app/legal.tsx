@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const isTV = Platform.isTV;
@@ -97,7 +98,10 @@ export default function LegalScreen() {
                         showsVerticalScrollIndicator={false}
                     >
                         {/* Hero / Titles */}
-                        <View style={[styles.hero, { borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)' }]}>
+                        <Animated.View
+                            entering={FadeIn.duration(500)}
+                            style={[styles.hero, { borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)' }]}
+                        >
                             <LinearGradient
                                 colors={isDark ? ['rgba(229,9,20,0.18)', 'transparent'] : ['rgba(229,9,20,0.10)', 'transparent']}
                                 start={{ x: 0, y: 0 }}
@@ -125,11 +129,15 @@ export default function LegalScreen() {
                                     ? 'يرجى قراءة الأقسام التالية بعناية. يمكنك الضغط على زر الموافقة في الأسفل في أي وقت.'
                                     : 'Please review the sections below. You can accept using the button at the bottom at any time.'}
                             </Text>
-                        </View>
+                        </Animated.View>
 
                         {/* Sections */}
                         {sections.map((sec, i) => (
-                            <View key={i} style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
+                            <Animated.View
+                                key={i}
+                                entering={FadeInDown.delay(i * 40).duration(400).springify()}
+                                style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}
+                            >
                                 <View style={[styles.sectionHeaderRow, isRTL && styles.rowReverse]}>
                                     <View style={[styles.sectionIndexPill, { backgroundColor: `${Brand.primary}18` }]}>
                                         <Text style={[styles.sectionIndex, { color: Brand.primary, fontFamily: FontFamily.black }]}>
@@ -171,12 +179,15 @@ export default function LegalScreen() {
                                         </Text>
                                     </View>
                                 ))}
-                            </View>
+                            </Animated.View>
                         ))}
                     </TVScrollView>
 
                     {/* Sticky Accept button (always reachable on TV) */}
-                    <View style={[styles.acceptBar, { paddingHorizontal: tv(16, TVSafe.paddingHorizontal) }]}>
+                    <Animated.View
+                        entering={FadeInUp.delay(sections.length * 40 + 100).duration(600).springify()}
+                        style={[styles.acceptBar, { paddingHorizontal: tv(16, TVSafe.paddingHorizontal) }]}
+                    >
                         <TVPressable
                             onPress={async () => {
                                 await accept();
@@ -197,7 +208,7 @@ export default function LegalScreen() {
                                 {isRTL ? 'أوافق' : 'I Agree'}
                             </Text>
                         </TVPressable>
-                    </View>
+                    </Animated.View>
                 </View>
             </SafeAreaView>
         </View>
