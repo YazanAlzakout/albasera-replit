@@ -1,6 +1,5 @@
 import { TVPressable } from '@/components/shared/TVPressable';
 import { MediaTrack, WebVideoPlayer, WebVideoPlayerRef } from '@/components/shared/WebVideoPlayer';
-import { NativeLivePlayer, NativeLivePlayerRef } from '@/components/shared/NativeLivePlayer';
 import { ThemedText } from '@/components/themed-text';
 import { TVRow } from '@/components/tv/SpatialWrappers';
 import { Brand } from '@/constants/theme';
@@ -37,8 +36,6 @@ const CONTROLS_TIMEOUT = 5000;
 const isTV = Platform.isTV;
 const isWeb = Platform.OS === 'web';
 const isIOS = Platform.OS === 'ios';
-const isAndroid = Platform.OS === 'android';
-type PlaybackEngine = 'media3' | 'vlc';
 const LIVE_CHANNELS_CACHE_MS = 5 * 60 * 1000;
 const CHANNEL_ROW_HEIGHT = isTV ? 62 : 54;
 const CHANNEL_ROW_GAP = 5;
@@ -156,11 +153,6 @@ export default function PlayerScreen() {
     const [seekBarNode, setSeekBarNode] = useState<number | null>(null);
 
     const isLive = type === 'live';
-    // Media3 (expo-video) is the default Android engine; VLC is used only as a
-    // fallback for streams Media3 can't decode (e.g. MP2 audio). See
-    // .agents/memory/mp2-audio-strategy.md for why this codec gap exists.
-    const [engine, setEngine] = useState<PlaybackEngine>('media3');
-    const useNativeVlc = isAndroid && engine === 'vlc';
     const [activeLiveChannel, setActiveLiveChannel] = useState({
         id: initialStreamId,
         name: initialName,
@@ -213,9 +205,6 @@ export default function PlayerScreen() {
     const nextEpSlide = useRef(new Animated.Value(300)).current;
 
     const webPlayerRef = useRef<WebVideoPlayerRef>(null);
-    const nativeLivePlayerRef = useRef<NativeLivePlayerRef>(null);
-    const [vlcReloadKey, setVlcReloadKey] = useState(0);
-    const vlcUiUpdateRef = useRef(0);
     const webUiUpdateRef = useRef(0);
 
     useEffect(() => {
@@ -272,8 +261,8 @@ export default function PlayerScreen() {
 
     const videoUrl = typeof videoSource === 'string' ? videoSource : (videoSource?.uri ?? '');
 
-    const expoPlayer = useVideoPlayer((useNativeVlc || isWeb) ? null : videoSource, (p) => {
-        if (!isWeb && !useNativeVlc) {
+    const expoPlayer = useVideoPlayer(isWeb ? null : videoSource, (p) => {
+        if (!isWeb) {
             p.loop = false;
             p.timeUpdateEventInterval = 1;
             p.audioMixingMode = 'doNotMix';
@@ -284,23 +273,11 @@ export default function PlayerScreen() {
     // Keep this adapter tied to the current native VideoPlayer. A ref created
     // once here would keep a released SharedObject after source replacement.
     const player = useMemo(() => ({
-        play: () => useNativeVlc
-            ? nativeLivePlayerRef.current?.play()
-            : isWeb ? webPlayerRef.current?.play() : expoPlayer.play(),
-        pause: () => useNativeVlc
-            ? nativeLivePlayerRef.current?.pause()
-            : isWeb ? webPlayerRef.current?.pause() : expoPlayer.pause(),
-        seekBy: (secs: number) => {
-            if (useNativeVlc) {
-                nativeLivePlayerRef.current?.seekBy(secs);
-                return;
-            }
-            return isWeb ? webPlayerRef.current?.seekBy(secs) : expoPlayer.seekBy(secs);
-        },
+        play: () => isWeb ? webPlayerRef.current?.play() : expoPlayer.play(),
+        pause: () => isWeb ? webPlayerRef.current?.pause() : expoPlayer.pause(),
+        seekBy: (secs: number) => isWeb ? webPlayerRef.current?.seekBy(secs) : expoPlayer.seekBy(secs),
         replace: (url: string) => {
-            if (useNativeVlc) {
-                setWebSourceUrl(url);
-            } else if (isWeb) {
+            if (isWeb) {
                 webPlayerRef.current?.replace(url);
             } else if (typeof (expoPlayer as any).replaceAsync === 'function') {
                 void (expoPlayer as any).replaceAsync(url);
@@ -308,53 +285,31 @@ export default function PlayerScreen() {
                 expoPlayer.replace(url);
             }
         },
-        get duration() { return useNativeVlc ? duration : isWeb ? (webPlayerRef.current?.duration || 0) : expoPlayer.duration; },
-        get currentTime() { return useNativeVlc ? currentTime : isWeb ? (webPlayerRef.current?.currentTime || 0) : expoPlayer.currentTime; },
+        get duration() { return isWeb ? (webPlayerRef.current?.duration || 0) : expoPlayer.duration; },
+        get currentTime() { return isWeb ? (webPlayerRef.current?.currentTime || 0) : expoPlayer.currentTime; },
         set currentTime(v) {
-            if (useNativeVlc) {
-                nativeLivePlayerRef.current?.seekTo(v);
-                setCurrentTime(v);
-                progressRef.current.currentTime = v;
-                return;
-            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.currentTime = v; } else expoPlayer.currentTime = v;
         },
-        get playing() { return useNativeVlc ? playing : isWeb ? playing : expoPlayer.playing; },
-        get playbackRate() { return useNativeVlc ? playbackRate : isWeb ? (webPlayerRef.current?.playbackRate || 1) : expoPlayer.playbackRate; },
+        get playing() { return isWeb ? playing : expoPlayer.playing; },
+        get playbackRate() { return isWeb ? (webPlayerRef.current?.playbackRate || 1) : expoPlayer.playbackRate; },
         set playbackRate(v) {
-            if (useNativeVlc) {
-                setPlaybackRate(v);
-                return;
-            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.playbackRate = v; } else expoPlayer.playbackRate = v;
         },
-        get volume() { return useNativeVlc ? volume : isWeb ? (webPlayerRef.current?.volume ?? 1) : (expoPlayer as any).volume ?? 1; },
+        get volume() { return isWeb ? (webPlayerRef.current?.volume ?? 1) : (expoPlayer as any).volume ?? 1; },
         set volume(v) {
-            if (useNativeVlc) {
-                setVolume(v);
-                return;
-            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.volume = v; } else (expoPlayer as any).volume = v;
         },
-        get subtitleTrack() { return useNativeVlc ? selectedSubtitleTrack : isWeb ? webPlayerRef.current?.subtitleTrack : (expoPlayer as any).subtitleTrack; },
+        get subtitleTrack() { return isWeb ? webPlayerRef.current?.subtitleTrack : (expoPlayer as any).subtitleTrack; },
         set subtitleTrack(v) {
-            if (useNativeVlc) {
-                setSelectedSubtitleTrack(v);
-                return;
-            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.subtitleTrack = v; } else (expoPlayer as any).subtitleTrack = v;
         },
-        get availableSubtitleTracks() { return useNativeVlc ? availableSubtitleTracks : isWeb ? (webPlayerRef.current?.availableSubtitleTracks || []) : ((expoPlayer as any).availableSubtitleTracks || []); },
-        get audioTrack() { return useNativeVlc ? selectedAudioTrack : isWeb ? webPlayerRef.current?.audioTrack : (expoPlayer as any).audioTrack; },
+        get availableSubtitleTracks() { return isWeb ? (webPlayerRef.current?.availableSubtitleTracks || []) : ((expoPlayer as any).availableSubtitleTracks || []); },
+        get audioTrack() { return isWeb ? webPlayerRef.current?.audioTrack : (expoPlayer as any).audioTrack; },
         set audioTrack(v) {
-            if (useNativeVlc) {
-                setSelectedAudioTrack(v);
-                return;
-            }
             if (isWeb) { if (webPlayerRef.current) webPlayerRef.current.audioTrack = v; } else (expoPlayer as any).audioTrack = v;
         },
-        get availableAudioTracks() { return useNativeVlc ? availableAudioTracks : isWeb ? (webPlayerRef.current?.availableAudioTracks || []) : ((expoPlayer as any).availableAudioTracks || []); },
-    }), [availableAudioTracks, availableSubtitleTracks, currentTime, duration, expoPlayer, isWeb, playbackRate, playing, selectedAudioTrack, selectedSubtitleTrack, useNativeVlc, volume]);
+        get availableAudioTracks() { return isWeb ? (webPlayerRef.current?.availableAudioTracks || []) : ((expoPlayer as any).availableAudioTracks || []); },
+    }), [expoPlayer, isWeb, playing]);
 
     const animateControls = useCallback((show: boolean) => {
         showControlsRef.current = show;
@@ -422,7 +377,6 @@ export default function PlayerScreen() {
         fallbackIndexRef.current = 0;
         setFallbackUrls(urls.length > 0 ? urls : [nextUrl]);
         setActiveLiveChannel(nextChannel);
-        setEngine('media3');
         setAudioDiagnostic(null);
         setAvailableAudioTracks([]);
         setSelectedAudioTrack(null);
@@ -594,58 +548,37 @@ export default function PlayerScreen() {
         startControlsTimer();
     }, [fallbackUrls.length, isLive, startControlsTimer, tryNextFallback]);
 
-    // Media3 can't decode every codec IPTV providers use (MP2 audio being the
-    // known case — see .agents/memory/mp2-audio-strategy.md). When it can't
-    // play a stream, drop to VLC for that stream instead of surfacing an error.
-    const fallBackToVlc = useCallback(() => {
-        setAvailableAudioTracks([]);
-        setSelectedAudioTrack(null);
-        setAudioDiagnostic(null);
-        setPlayerStatus('loading');
-        setEngine('vlc');
-    }, []);
-
     useEffect(() => {
-        if (isWeb || useNativeVlc) return;
+        if (isWeb) return;
         const sub = expoPlayer.addListener('statusChange', ({ status, error }) => {
             if (status !== 'error') {
                 setPlayerStatus(status as PlayerStatus);
                 return;
             }
 
-            const audioError = diagnoseNativeAudioError(error?.message);
-            const isCodecUnsupported = audioError?.status === 'unsupported';
-
-            // A different URL for the same broadcast still has the same audio
-            // codec, so URL-cycling can't fix a confirmed codec error — go
-            // straight to VLC. Otherwise, try the remaining fallback URLs first.
-            if (isAndroid && !isCodecUnsupported && isLive && fallbackIndexRef.current < fallbackUrls.length - 1) {
+            if (isLive && fallbackIndexRef.current < fallbackUrls.length - 1) {
                 if (tryNextFallback()) return;
             }
 
-            if (isAndroid) {
-                fallBackToVlc();
-                return;
-            }
-
+            const audioError = diagnoseNativeAudioError(error?.message);
             if (audioError) setAudioDiagnostic(audioError);
             setPlayerStatus('error');
         });
         setPlayerStatus(expoPlayer.status as PlayerStatus);
-        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
-    }, [expoPlayer, fallBackToVlc, fallbackUrls.length, isLive, tryNextFallback, useNativeVlc]);
+        return () => { try { sub.remove(); } catch { /* released across a source replace */ } };
+    }, [expoPlayer, fallbackUrls.length, isLive, tryNextFallback]);
 
     useEffect(() => {
-        if (isWeb || useNativeVlc) return;
+        if (isWeb) return;
         const sub = expoPlayer.addListener('playingChange', ({ isPlaying }) => {
             setPlaying(isPlaying);
         });
         setPlaying(expoPlayer.playing);
-        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
-    }, [expoPlayer, useNativeVlc]);
+        return () => { try { sub.remove(); } catch { /* released across a source replace */ } };
+    }, [expoPlayer]);
 
     useEffect(() => {
-        if (isWeb || useNativeVlc) return;
+        if (isWeb) return;
 
         const updateAudioTracks = (tracks: Array<{ id?: string; language?: string; label?: string }>) => {
             const normalizedTracks = tracks.map((track) => ({
@@ -665,13 +598,13 @@ export default function PlayerScreen() {
         });
         updateAudioTracks(expoPlayer.availableAudioTracks);
         return () => {
-            try { tracksSub.remove(); } catch { /* released by an engine fallback flip */ }
-            try { sourceSub.remove(); } catch { /* released by an engine fallback flip */ }
+            try { tracksSub.remove(); } catch { /* released across a source replace */ }
+            try { sourceSub.remove(); } catch { /* released across a source replace */ }
         };
-    }, [expoPlayer, useNativeVlc]);
+    }, [expoPlayer]);
 
     useEffect(() => {
-        if (isWeb || useNativeVlc) return;
+        if (isWeb) return;
 
         let lastUIUpdate = 0;
         const TV_UI_INTERVAL = isTV ? 2000 : 200;
@@ -690,8 +623,8 @@ export default function PlayerScreen() {
                 }
             }
         });
-        return () => { try { sub.remove(); } catch { /* released by an engine fallback flip */ } };
-    }, [expoPlayer, useNativeVlc]);
+        return () => { try { sub.remove(); } catch { /* released across a source replace */ } };
+    }, [expoPlayer]);
 
     useEffect(() => {
         if (playerStatus === 'readyToPlay') {
@@ -707,28 +640,12 @@ export default function PlayerScreen() {
             setAvailableAudioTracks(audioTracks);
             // Media3 sometimes plays a stream successfully (video renders, no
             // error ever fires) while silently dropping an audio track it
-            // can't decode (MP2 being the known case) - no PlaybackException,
-            // just no sound. A hard error is what the statusChange listener
-            // above catches; this is the "looks fine but is silently mute"
-            // case that needs its own check, right when we know playback
-            // actually succeeded.
-            //
-            // `availableAudioTracks` lists every track the stream declares,
-            // decodable or not - expo-video is patched to also expose Media3's
-            // own `isSupported` flag per track (see patches/expo-video), which
-            // would in principle be the precise signal here. In practice it
-            // flags far more tracks as "unsupported" than are actually silent
-            // (e.g. AC-3 on devices without a hardware decoder can still play
-            // audibly through Media3's own handling), so gating fallback on it
-            // pushed way more channels/movies/series onto VLC than intended -
-            // VLC is measurably heavier, and that showed up as stutter
-            // everywhere. Falling back only when NO track is reported at all
-            // is the narrower, safe signal; it won't catch every silently-mute
-            // case (a stream with exactly one unsupported track, like the MP2
-            // case this was meant to add) but that's the deliberate tradeoff
-            // until there's a more precise signal than isTrackSupported().
-            if (isAndroid && !useNativeVlc && audioTracks.length === 0) {
-                fallBackToVlc();
+            // can't decode - no PlaybackException, just no sound. A hard error
+            // is what the statusChange listener above catches; this is the
+            // "looks fine but is silently mute" case, surfaced here as a
+            // diagnostic since there's no fallback engine left to switch to.
+            if (audioTracks.length === 0) {
+                setAudioDiagnostic({ status: 'missing' });
             }
             const contentType = type as string;
             if ((contentType === 'movie' || contentType === 'series') && !resumeAppliedRef.current) {
@@ -743,7 +660,7 @@ export default function PlayerScreen() {
                 });
             }
         }
-    }, [configuredSubtitleTracks, isWeb, playerStatus, useNativeVlc, fallBackToVlc]);
+    }, [configuredSubtitleTracks, isWeb, playerStatus]);
 
     useFocusEffect(useCallback(() => {
         if (isTV) return undefined;
@@ -806,9 +723,6 @@ export default function PlayerScreen() {
                 } else {
                     setWebSourceUrl(firstUrl);
                 }
-            } else if (useNativeVlc) {
-                setWebSourceUrl(firstUrl);
-                setVlcReloadKey((value) => value + 1);
             } else {
                 const source = buildNativeSource(firstUrl);
                 if (typeof (expoPlayer as any).replaceAsync === 'function') {
@@ -822,9 +736,6 @@ export default function PlayerScreen() {
             setPlayerStatus('loading');
             if (isWeb) {
                 webPlayerRef.current?.replace(videoUrl);
-            } else if (useNativeVlc) {
-                setWebSourceUrl(videoUrl);
-                setVlcReloadKey((value) => value + 1);
             } else {
                 const source = buildNativeSource(videoUrl);
                 if (typeof (expoPlayer as any).replaceAsync === 'function') {
@@ -835,7 +746,7 @@ export default function PlayerScreen() {
                 expoPlayer.play();
             }
         }
-    }, [buildNativeSource, expoPlayer, fallbackUrls, isLive, useNativeVlc, videoUrl]);
+    }, [buildNativeSource, expoPlayer, fallbackUrls, isLive, videoUrl]);
 
     const handlePlayPause = useCallback(() => {
         player.playing ? player.pause() : player.play();
@@ -1044,50 +955,6 @@ export default function PlayerScreen() {
                         if (status === 'unsupported' && isLive) {
                             tryNextFallback();
                         }
-                    }}
-                />
-            ) : useNativeVlc ? (
-                <NativeLivePlayer
-                    ref={nativeLivePlayerRef}
-                    source={webSourceUrl || videoUrl}
-                    volume={volume}
-                    playbackRate={playbackRate}
-                    selectedAudioTrackId={selectedAudioTrack?.id}
-                    selectedSubtitleTrackId={selectedSubtitleTrack?.id}
-                    reloadKey={vlcReloadKey}
-                    onLoading={() => {
-                        setPlayerStatus((status) => status === 'readyToPlay' ? status : 'loading');
-                    }}
-                    onPlaying={() => {
-                        setPlaying(true);
-                        setPlayerStatus('readyToPlay');
-                        setAudioDiagnostic(null);
-                    }}
-                    onPaused={() => setPlaying(false)}
-                    onError={() => {
-                        setPlaying(false);
-                        if (!tryNextFallback()) setPlayerStatus('error');
-                    }}
-                    onProgress={(ct, d) => {
-                        progressRef.current = { currentTime: ct, duration: Number.isFinite(d) ? d : 0 };
-                        if (!slidingRef.current && !isScrubbingRef.current) {
-                            const now = Date.now();
-                            const tvUiInterval = isTV ? 2000 : 200;
-                            if (now - vlcUiUpdateRef.current >= tvUiInterval) {
-                                vlcUiUpdateRef.current = now;
-                                setCurrentTime(ct);
-                                if (Number.isFinite(d) && d > 0) setDuration(d);
-                            } else if (Number.isFinite(d) && d > 0 && duration <= 0) {
-                                setDuration(d);
-                            }
-                        }
-                    }}
-                    onAudioTracks={(tracks) => {
-                        setAvailableAudioTracks(tracks);
-                        setAudioDiagnostic(tracks.length > 0 ? null : { status: 'missing' });
-                    }}
-                    onSubtitleTracks={(tracks) => {
-                        setAvailableSubtitleTracks(tracks);
                     }}
                 />
             ) : (

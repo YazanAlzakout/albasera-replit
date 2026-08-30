@@ -91,11 +91,6 @@ module.exports = {
                 }
             ],
 
-            // VLC's bundled Expo config plugin (expo/android/withGradleTasks.js) anchors on
-            // applyNativeModulesAppBuildGradle(project), which Expo 54 / RN 0.81 replaced with
-            // autolinkLibrariesWithApp(). It is intentionally not registered here — the native
-            // module still autolinks normally (Android via its android/build.gradle, iOS via its
-            // podspec's own MobileVLCKit dependency), so no config plugin is required for linking.
             "expo-font",
             "expo-secure-store",
 
@@ -104,13 +99,11 @@ module.exports = {
                 {
                     android: {
                         usesCleartextTraffic: true,
-                        // libvlc-all 3.6.3 (react-native-vlc-media-player's Android dependency)
-                        // declares minSdkVersion 26; the manifest merger fails against Expo's
-                        // default of 24.
                         minSdkVersion: 26,
                         packagingOptions: {
-                            // libvlc-all bundles its own libc++_shared.so, which otherwise
-                            // conflicts with RN's during the native-libs merge task.
+                            // Multiple native modules can bundle their own copy of
+                            // libc++_shared.so; picking the first avoids a native-libs
+                            // merge conflict during the build.
                             pickFirst: ["**/libc++_shared.so"]
                         }
                     }
@@ -122,9 +115,9 @@ module.exports = {
             // Wires modules/decoder-ffmpeg-mp2 (a from-scratch, LGPL-safe FFmpeg
             // build with only the MP2 decoder enabled, Apache-2.0 wrapper code
             // vendored from androidx/media) into Media3 as an extension audio
-            // renderer, so MP2 live channels decode natively instead of falling
-            // back to VLC. See patches/expo-video+*.patch for the two lines this
-            // depends on (build.gradle dependency + setExtensionRendererMode).
+            // renderer, so MP2 live channels decode natively. See
+            // patches/expo-video+*.patch for the two lines this depends on
+            // (build.gradle dependency + setExtensionRendererMode).
             "./plugins/withDecoderFfmpegMp2",
 
             ...(isTV ? ["@react-native-tvos/config-tv"] : [])
