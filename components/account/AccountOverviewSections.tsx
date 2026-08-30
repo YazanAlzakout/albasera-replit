@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 const isTV = Platform.isTV;
 const tv = (m: number, t: number) => (isTV ? t : m);
 
@@ -268,7 +269,7 @@ export function AccountOverviewSections({
     return (
         <View style={styles.wrapper}>
             {hasXtreamUser && user && (
-                <>
+                <Animated.View entering={FadeInDown.delay(0 * 80).duration(400).springify()}>
                     <AccountSectionHeader title={t.dashboard.subscriptionAndConnection} isDark={isDark} isRTL={isRTL} />
                     <AccountSubscriptionCard
                         user={user}
@@ -279,24 +280,26 @@ export function AccountOverviewSections({
                         cardBg={cardBg}
                         cardBorder={cardBorder}
                     />
-                </>
+                </Animated.View>
             )}
 
-            <AccountSectionHeader title={t.dashboard.yourActivity} isDark={isDark} isRTL={isRTL} />
-            <StorageStats
-                historyCount={historyCount}
-                favCount={favCount}
-                wlCount={wlCount}
-                isDark={isDark}
-                isRTL={isRTL}
-                t={t}
-            />
+            <Animated.View entering={FadeInDown.delay(1 * 80).duration(400).springify()}>
+                <AccountSectionHeader title={t.dashboard.yourActivity} isDark={isDark} isRTL={isRTL} />
+                <StorageStats
+                    historyCount={historyCount}
+                    favCount={favCount}
+                    wlCount={wlCount}
+                    isDark={isDark}
+                    isRTL={isRTL}
+                    t={t}
+                />
+            </Animated.View>
 
             {user?.server_info ? (
-                <>
+                <Animated.View entering={FadeInDown.delay(2 * 80).duration(400).springify()}>
                     <AccountSectionHeader title={t.dashboard.serverInfoTitle} isDark={isDark} isRTL={isRTL} />
                     <ServerInfoCard user={user} isDark={isDark} isRTL={isRTL} t={t} />
-                </>
+                </Animated.View>
             ) : null}
         </View>
     );
