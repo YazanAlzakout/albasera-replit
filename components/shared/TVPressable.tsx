@@ -28,7 +28,7 @@ interface TVPressableProps extends Omit<PressableProps, 'style'> {
     children: React.ReactNode;
 }
 
-export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVPressable({
+export const TVPressable = React.memo(React.forwardRef<View, TVPressableProps>(function TVPressable({
     style,
     focusVariant = 'card',
     focusStyle,
@@ -167,7 +167,7 @@ export const TVPressable = React.forwardRef<View, TVPressableProps>(function TVP
             )}
         </SpatialNavigationFocusableView>
     );
-});
+}));
 
 TVPressable.displayName = 'TVPressable';
 
