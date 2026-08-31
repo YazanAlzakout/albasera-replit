@@ -59,6 +59,7 @@ export default function ContentLockScreen() {
     const { type } = useLocalSearchParams<{ type?: string }>();
     const lockType: LockType = type === 'live' || type === 'movie' || type === 'series' ? type : 'live';
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [query, setQuery] = useState('');
     const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
 
@@ -81,9 +82,12 @@ export default function ContentLockScreen() {
     useEffect(() => {
         const load = async () => {
             setLoading(true);
+            setLoadError(false);
             try {
                 const cats = await xtreamService.getCategories(lockType);
                 setCategories(cats.map((c) => ({ id: String(c.category_id), name: c.category_name })));
+            } catch {
+                setLoadError(true);
             } finally {
                 setLoading(false);
             }
@@ -153,6 +157,13 @@ export default function ContentLockScreen() {
                 {loading ? (
                     <View style={styles.center}>
                         <ActivityIndicator size="large" color={Brand.primary} />
+                    </View>
+                ) : loadError ? (
+                    <View style={styles.center}>
+                        <Ionicons name="cloud-offline-outline" size={32} color={subC} />
+                        <Text style={[styles.empty, { color: subC, fontFamily: FontFamily.medium, marginTop: 10 }]}>
+                            {isRTL ? 'تعذر تحميل الفئات. تحقق من اتصالك.' : 'Unable to load categories. Check your connection.'}
+                        </Text>
                     </View>
                 ) : (
                     <FlatList
