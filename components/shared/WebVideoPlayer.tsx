@@ -6,6 +6,7 @@ export interface WebVideoPlayerRef {
     pause: () => void;
     seekBy: (secs: number) => void;
     replace: (url: string) => void;
+    enterFullscreen: () => void;
     currentTime: number;
     duration: number;
     playbackRate: number;

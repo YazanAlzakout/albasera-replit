@@ -775,7 +775,7 @@ export default function PlayerScreen() {
             extension: (Array.isArray(extension) ? extension[0] : extension) as string | undefined,
             timestamp: Date.now(),
         });
-    }, []);
+    }, [type, streamId, name, cover, episode, extension]);
 
     useEffect(() => {
         return () => { saveProgress(); };
@@ -1109,7 +1109,17 @@ export default function PlayerScreen() {
                                         <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={20} color="#fff" />
                                     </TVPressable>
                                     {!isTV && (
-                                        <TVPressable onPress={() => videoViewRef.current?.enterFullscreen?.()} style={styles.iconBtn} focusVariant="control">
+                                        <TVPressable
+                                            onPress={() => {
+                                                if (isWeb) {
+                                                    webPlayerRef.current?.enterFullscreen?.();
+                                                } else {
+                                                    videoViewRef.current?.enterFullscreen?.();
+                                                }
+                                            }}
+                                            style={styles.iconBtn}
+                                            focusVariant="control"
+                                        >
                                             <Ionicons name="expand-outline" size={20} color="#fff" />
                                         </TVPressable>
                                     )}

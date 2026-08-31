@@ -37,6 +37,7 @@ export interface WebVideoPlayerRef {
     pause: () => void;
     seekBy: (secs: number) => void;
     replace: (url: string) => void;
+    enterFullscreen: () => void;
     currentTime: number;
     duration: number;
     playbackRate: number;
@@ -114,6 +115,9 @@ export const WebVideoPlayer = React.forwardRef<WebVideoPlayerRef, WebVideoPlayer
         },
         replace: (url: string) => {
             loadSource(url);
+        },
+        enterFullscreen: () => {
+            videoRef.current?.requestFullscreen?.().catch(() => undefined);
         },
         get currentTime() {
             return videoRef.current?.currentTime || 0;
