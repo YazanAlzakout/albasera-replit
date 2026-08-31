@@ -931,11 +931,30 @@ export default function PlayerScreen() {
     const nextEpisodeId = nextEpisodeStreamId != null ? String(Array.isArray(nextEpisodeStreamId) ? nextEpisodeStreamId[0] : nextEpisodeStreamId) : null;
     const nextEpisodeExt = nextEpisodeExtension != null ? (Array.isArray(nextEpisodeExtension) ? nextEpisodeExtension[0] : nextEpisodeExtension) as string : undefined;
     const nextEpisodeName = nextEpisodeLabel != null ? (Array.isArray(nextEpisodeLabel) ? nextEpisodeLabel[0] : nextEpisodeLabel) as string : undefined;
-    const showNextEpisode = type === 'series' && nextEpisodeId && nextEpisodeName && showProgress && duration > 0 && (duration - currentTime) < 20;
+    const [nextEpisodeDismissed, setNextEpisodeDismissed] = useState(false);
+    const showNextEpisode = type === 'series' && nextEpisodeId && nextEpisodeName && showProgress && duration > 0 && (duration - currentTime) < 20 && !nextEpisodeDismissed;
 
     useEffect(() => {
         nextEpSlide.value = withSpring(showNextEpisode ? 0 : 300, { damping: 16, stiffness: 120 });
     }, [showNextEpisode]);
+
+    const nextEpisodeAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: nextEpSlide.value }],
+    }));
+
+    const goToNextEpisode = useCallback(() => {
+        if (!nextEpisodeId) return;
+        saveProgress();
+        const p: Record<string, string> = {
+            streamId: nextEpisodeId,
+            extension: nextEpisodeExt || 'mkv',
+            type: 'series',
+            name: (Array.isArray(name) ? name[0] : name) as string ?? '',
+            cover: (Array.isArray(cover) ? cover[0] : cover) as string ?? '',
+        };
+        if (nextEpisodeName) p.episode = nextEpisodeName;
+        router.replace({ pathname: '/player', params: p });
+    }, [nextEpisodeId, nextEpisodeExt, nextEpisodeName, name, cover, saveProgress]);
 
     const isLoading = playerStatus === 'loading';
     const isError = playerStatus === 'error';
@@ -1574,6 +1593,39 @@ export default function PlayerScreen() {
                 </View>
             )}
 
+            {showNextEpisode && !isLocked && (
+                <Animated.View
+                    pointerEvents="box-none"
+                    style={[styles.nextEpisodeWrap, isRTL && styles.nextEpisodeWrapRTL, nextEpisodeAnimatedStyle]}
+                >
+                    <TVPressable
+                        onPress={goToNextEpisode}
+                        hasTVPreferredFocus={isTV}
+                        style={styles.nextEpisodeCard}
+                        focusVariant="card"
+                    >
+                        <View style={styles.nextEpisodeIconWrap}>
+                            <Ionicons name="play-skip-forward" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.nextEpisodeTextWrap}>
+                            <ThemedText style={styles.nextEpisodeLabel}>
+                                {isRTL ? 'الحلقة التالية' : 'Next Episode'}
+                            </ThemedText>
+                            <ThemedText style={styles.nextEpisodeName} numberOfLines={1}>
+                                {nextEpisodeName}
+                            </ThemedText>
+                        </View>
+                    </TVPressable>
+                    <TVPressable
+                        onPress={() => setNextEpisodeDismissed(true)}
+                        style={styles.nextEpisodeDismiss}
+                        focusVariant="control"
+                    >
+                        <Ionicons name="close" size={16} color="rgba(255,255,255,0.75)" />
+                    </TVPressable>
+                </Animated.View>
+            )}
+
             {isLoading && (
                 <Animated.View
                     entering={FadeIn.duration(180)}
@@ -1746,6 +1798,25 @@ const styles = StyleSheet.create({
     lockFloating: { position: 'absolute', bottom: 48, left: 20 },
     lockFloatingRTL: { left: undefined, right: 20 },
     lockFloatingBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    nextEpisodeWrap: { position: 'absolute', bottom: isTV ? 96 : 88, right: 20, flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 20 },
+    nextEpisodeWrapRTL: { right: undefined, left: 20, flexDirection: 'row-reverse' },
+    nextEpisodeCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'rgba(15,15,20,0.92)',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        maxWidth: 240,
+    },
+    nextEpisodeIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: Brand.primary, justifyContent: 'center', alignItems: 'center' },
+    nextEpisodeTextWrap: { flexShrink: 1 },
+    nextEpisodeLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
+    nextEpisodeName: { color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 2 },
+    nextEpisodeDismiss: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
     loadingCard: { alignItems: 'center', backgroundColor: 'rgba(10,10,15,0.7)', paddingHorizontal: 36, paddingVertical: 28, borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
     spinnerRing: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(229,9,20,0.08)', justifyContent: 'center', alignItems: 'center' },
