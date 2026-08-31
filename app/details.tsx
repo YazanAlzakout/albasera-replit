@@ -28,6 +28,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Alert,
+    FlatList,
     NativeScrollEvent,
     NativeSyntheticEvent,
     Platform,
@@ -250,19 +251,32 @@ const metaS = StyleSheet.create({
 
 // ── Episode card ─────────────────────────────────────────
 const EpisodeCard = React.memo(({
-    episode, episodeIndex, nextEpisode, isDark, onPressEpisode, canDownload, onDownloadEpisode, download, isRTL, episodeLabel,
+    episode, episodeIndex, nextEpisode, isDark, onPressEpisode, onDownloadEpisode, download, isRTL, episodeLabel,
 }: {
     episode: any;
     episodeIndex: number;
     nextEpisode: any;
     isDark: boolean;
     onPressEpisode: (episode: any, index: number, nextEpisode: any) => void;
-    canDownload: boolean;
     onDownloadEpisode: (episode: any, index: number) => void;
     download?: DownloadItem;
     isRTL: boolean;
     episodeLabel: string;
 }) => {
+    // Computed here (inside the memoized row) rather than by the parent's
+    // .map() - React.memo means this only re-runs when THIS episode's own
+    // props actually change, not on every unrelated re-render of a
+    // potentially 200+ episode list.
+    const canDownload = downloadService.canDownload({
+        type: 'series',
+        sourceUrl: xtreamService.getStreamUrl(
+            Number(episode.id ?? episode.stream_id),
+            episode.container_extension ?? 'mkv',
+            'series',
+        ),
+        extension: episode.container_extension ?? 'mkv',
+    });
+
     const scale = useSharedValue(1);
     const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
     const [imgErr, setImgErr] = useState(false);
@@ -644,6 +658,26 @@ export default function DetailsScreen() {
     const seasonKeys = useMemo(() => Object.keys(episodes).sort((a, b) => Number(a) - Number(b)), [episodes]);
     const seasonInfo = useMemo(() => seasonsMeta.find(s => String(s.season_number) === activeSeason), [seasonsMeta, activeSeason]);
     const activeEps = episodes[activeSeason] ?? [];
+
+    // The episode list is a FlatList (see render below) rather than a plain
+    // .map() inside the ScrollView, so long-running series (200+ episodes on
+    // some IPTV providers) get real windowing instead of mounting every row
+    // upfront.
+    const episodeKeyExtractor = useCallback((ep: any, i: number) => String(ep.id ?? i), []);
+    const renderEpisodeItem = useCallback(({ item, index }: { item: any; index: number }) => (
+        <EpisodeCard
+            episode={item}
+            episodeIndex={index}
+            nextEpisode={activeEps[index + 1]}
+            isDark={isDark}
+            isRTL={isRTL}
+            episodeLabel={t.content.episodes}
+            onPressEpisode={handlePlayEpisode}
+            onDownloadEpisode={handleDownloadEpisode}
+            download={downloads[String(item.id ?? item.stream_id)]}
+        />
+    ), [activeEps, isDark, isRTL, t.content.episodes, handlePlayEpisode, handleDownloadEpisode, downloads]);
+
     const handleMainPlay = useCallback(() => {
         if (type !== 'series') {
             handlePlay();
@@ -710,14 +744,24 @@ export default function DetailsScreen() {
             </Animated.View>
 
             {/* ══ SCROLL CONTENT ═══════════════════════════ */}
-            <ScrollView
+            {/* A FlatList (not a ScrollView) so the episode list below is
+                actually virtualized - everything above it (hero spacer
+                through the season/episode-count header) rides along as
+                ListHeaderComponent, and onScroll/parallax behave identically
+                since FlatList supports the same scroll props as ScrollView. */}
+            <FlatList
+                data={type === 'series' ? activeEps : []}
+                keyExtractor={episodeKeyExtractor}
+                renderItem={renderEpisodeItem}
                 onScroll={onScroll}
                 scrollEventThrottle={16}
                 style={StyleSheet.absoluteFill}
-                contentContainerStyle={{ paddingBottom: insets.bottom + tv(60, 40) }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + tv(60, 40), paddingHorizontal: tv(18, TVSafe.paddingHorizontal) }}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
-            >
+                removeClippedSubviews={!isTV}
+                ListHeaderComponent={
+                <>
                 {/* Spacer under hero */}
                 <View style={{ height: heroHeight - tv(72, 90) }} />
 
@@ -889,39 +933,13 @@ export default function DetailsScreen() {
                                     {activeEps.length} {t.content.episodes}
                                 </Text>
                             </View>
-
-                            {/* Episode list */}
-                            {activeEps.map((ep, i) => {
-                                const nextEp = activeEps[i + 1];
-                                return (
-                                    <EpisodeCard
-                                        key={ep.id ?? i}
-                                        episode={ep}
-                                        episodeIndex={i}
-                                        nextEpisode={nextEp}
-                                        isDark={isDark}
-                                        isRTL={isRTL}
-                                        episodeLabel={t.content.episodes}
-                                        onPressEpisode={handlePlayEpisode}
-                                        canDownload={downloadService.canDownload({
-                                            type: 'series',
-                                            sourceUrl: xtreamService.getStreamUrl(
-                                                Number(ep.id ?? ep.stream_id),
-                                                ep.container_extension ?? 'mkv',
-                                                'series',
-                                            ),
-                                            extension: ep.container_extension ?? 'mkv',
-                                        })}
-                                        onDownloadEpisode={handleDownloadEpisode}
-                                        download={downloads[String(ep.id ?? ep.stream_id)]}
-                                    />
-                                );
-                            })}
                         </Animated.View>
                     )}
 
                 </View>
-            </ScrollView>
+                </>
+                }
+            />
         </View>
     );
 }
@@ -953,8 +971,11 @@ const S = StyleSheet.create({
     },
 
     // ── Content ───────────────────────────────────────────
+    // Horizontal padding now lives on the FlatList's contentContainerStyle
+    // (see render) so it applies evenly to both this header and the
+    // virtualized episode rows below it, which are siblings of this View,
+    // not descendants.
     content: {
-        paddingHorizontal: tv(18, TVSafe.paddingHorizontal),
         paddingTop: tv(10, 18),
     },
 
