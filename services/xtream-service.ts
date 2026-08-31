@@ -90,6 +90,7 @@ class XtreamService {
     private apiPath: string = 'player_api.php';
     private streamCache = new Map<string, { expiresAt: number; request: Promise<XtreamStream[]> }>();
     private infoCache = new Map<string, { expiresAt: number; request: Promise<any> }>();
+    private categoryCache = new Map<string, { expiresAt: number; request: Promise<XtreamCategory[]> }>();
 
     initialize(url: string, username: string, password: string, options?: { apiPath?: string }) {
         // Ensure url has protocol and no trailing slash
@@ -112,6 +113,7 @@ class XtreamService {
         this.apiPath = options?.apiPath ?? 'player_api.php';
         this.streamCache.clear();
         this.infoCache.clear();
+        this.categoryCache.clear();
 
         const isWeb = Platform.OS === 'web';
         const headers: Record<string, string> = {
@@ -156,12 +158,20 @@ class XtreamService {
     async getCategories(type: 'live' | 'movie' | 'series'): Promise<XtreamCategory[]> {
         const client = this.getClient();
         const action = type === 'live' ? 'get_live_categories' : type === 'movie' ? 'get_vod_categories' : 'get_series_categories';
-        try {
-            const response = await client.get<unknown>('', { params: { action } });
-            return requireArray<XtreamCategory>(response.data, 'categories');
-        } catch (error: unknown) {
-            throw this.normalizeError(error, 'Unable to load categories.');
+        const cacheKey = type;
+        const cached = this.categoryCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.request;
         }
+
+        const request = client.get<unknown>('', { params: { action } })
+            .then((response) => requireArray<XtreamCategory>(response.data, 'categories'))
+            .catch((error: unknown) => {
+                this.categoryCache.delete(cacheKey);
+                throw this.normalizeError(error, 'Unable to load categories.');
+            });
+        this.categoryCache.set(cacheKey, { expiresAt: Date.now() + 60_000, request });
+        return request;
     }
 
     async getStreams(type: 'live' | 'movie' | 'series', categoryId?: string): Promise<XtreamStream[]> {
