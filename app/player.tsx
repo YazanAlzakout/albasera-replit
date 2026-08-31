@@ -310,7 +310,19 @@ export default function PlayerScreen() {
 
     const videoUrl = typeof videoSource === 'string' ? videoSource : (videoSource?.uri ?? '');
 
-    const expoPlayer = useVideoPlayer(isWeb ? null : videoSource, (p) => {
+    // `useVideoPlayer` destroys and reconstructs the ENTIRE native player
+    // whenever its source argument's JSON representation changes (see
+    // expo-video's useReleasingSharedObject/useVideoPlayer implementation).
+    // Feeding the live `videoSource` memo in directly meant every channel
+    // switch and every fallback attempt tore down and rebuilt the whole
+    // decoder pipeline from scratch. Instead the player is constructed once
+    // with whatever source was current on mount, and every later source
+    // change is driven through `replaceAsync` in the effect below - the same
+    // API this file already used successfully for retry - so `expoPlayer`'s
+    // identity (and therefore the listener effects keyed on it) stays stable
+    // across switches instead of re-subscribing every tap.
+    const [initialVideoSource] = useState(() => videoSource);
+    const expoPlayer = useVideoPlayer(isWeb ? null : initialVideoSource, (p) => {
         if (!isWeb) {
             p.loop = false;
             p.timeUpdateEventInterval = 1;
@@ -319,21 +331,33 @@ export default function PlayerScreen() {
         }
     });
 
+    const isInitialSourceRef = useRef(true);
+    useEffect(() => {
+        if (isWeb) return;
+        if (isInitialSourceRef.current) {
+            isInitialSourceRef.current = false;
+            return;
+        }
+        (async () => {
+            try {
+                if (typeof (expoPlayer as any).replaceAsync === 'function') {
+                    await (expoPlayer as any).replaceAsync(videoSource);
+                } else {
+                    expoPlayer.replace(videoSource);
+                }
+                expoPlayer.play();
+            } catch {
+                // Player may already be released (e.g. screen unmounted mid-switch).
+            }
+        })();
+    }, [videoSource, expoPlayer]);
+
     // Keep this adapter tied to the current native VideoPlayer. A ref created
     // once here would keep a released SharedObject after source replacement.
     const player = useMemo(() => ({
         play: () => isWeb ? webPlayerRef.current?.play() : expoPlayer.play(),
         pause: () => isWeb ? webPlayerRef.current?.pause() : expoPlayer.pause(),
         seekBy: (secs: number) => isWeb ? webPlayerRef.current?.seekBy(secs) : expoPlayer.seekBy(secs),
-        replace: (url: string) => {
-            if (isWeb) {
-                webPlayerRef.current?.replace(url);
-            } else if (typeof (expoPlayer as any).replaceAsync === 'function') {
-                void (expoPlayer as any).replaceAsync(url);
-            } else {
-                expoPlayer.replace(url);
-            }
-        },
         get duration() { return isWeb ? (webPlayerRef.current?.duration || 0) : expoPlayer.duration; },
         get currentTime() { return isWeb ? (webPlayerRef.current?.currentTime || 0) : expoPlayer.currentTime; },
         set currentTime(v) {
