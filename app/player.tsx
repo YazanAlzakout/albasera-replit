@@ -435,28 +435,46 @@ export default function PlayerScreen() {
         return () => { cancelled = true; };
     }, [isLive]);
 
+    // The actual source swap (below) is debounced so a rapid/random flip
+    // burst only ever reaches the player once, for the last channel picked -
+    // everything in between would just be loaded and immediately replaced
+    // again. UI feedback (highlight, loading state, guide close) stays
+    // immediate on every tap so flipping still feels instant.
+    const pendingSourceSwapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        return () => {
+            if (pendingSourceSwapRef.current) clearTimeout(pendingSourceSwapRef.current);
+        };
+    }, []);
+
     const selectLiveChannel = useCallback((nextChannel: LiveChannel) => {
         if (!isLive || nextChannel.id === activeLiveChannel.id) return;
-        const urls = xtreamService.getLiveStreamFallbackUrls(
-            parseInt(nextChannel.id, 10),
-            isWeb ? nextChannel.extension : 'm3u8',
-        );
-        const nextUrl = urls[0] || xtreamService.getStreamUrl(parseInt(nextChannel.id, 10), nextChannel.extension, 'live');
 
-        fallbackIndexRef.current = 0;
-        setFallbackUrls(urls.length > 0 ? urls : [nextUrl]);
         setActiveLiveChannel(nextChannel);
         setAudioDiagnostic(null);
         setAvailableAudioTracks([]);
         setSelectedAudioTrack(null);
         setPlayerStatus('loading');
-        currentStreamUrlRef.current = nextUrl;
-        setWebSourceUrl(nextUrl);
         if (!isTV) {
             setShowChannelGuide(false);
             setActiveFocus('channelsBtn');
         }
         startControlsTimer();
+
+        if (pendingSourceSwapRef.current) clearTimeout(pendingSourceSwapRef.current);
+        pendingSourceSwapRef.current = setTimeout(() => {
+            pendingSourceSwapRef.current = null;
+            const urls = xtreamService.getLiveStreamFallbackUrls(
+                parseInt(nextChannel.id, 10),
+                isWeb ? nextChannel.extension : 'm3u8',
+            );
+            const nextUrl = urls[0] || xtreamService.getStreamUrl(parseInt(nextChannel.id, 10), nextChannel.extension, 'live');
+
+            fallbackIndexRef.current = 0;
+            setFallbackUrls(urls.length > 0 ? urls : [nextUrl]);
+            currentStreamUrlRef.current = nextUrl;
+            setWebSourceUrl(nextUrl);
+        }, 180);
     }, [activeLiveChannel.id, isLive, startControlsTimer]);
 
     // O(1) id -> index lookup instead of scanning the (potentially thousands-long)
