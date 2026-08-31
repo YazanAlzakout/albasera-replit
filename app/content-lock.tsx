@@ -6,16 +6,54 @@ import { useAppTheme } from '@/contexts/theme-context';
 import { xtreamService } from '@/services/xtream-service';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Dimensions, FlatList, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type LockType = 'live' | 'movie' | 'series';
+type CategoryEntry = { id: string; name: string };
 
 const { width: W } = Dimensions.get('window');
 const isTV = Platform.isTV;
 const tv = (m: number, t: number) => (isTV ? t : m);
+
+const CategoryRow = React.memo(({
+    entry, index, isHidden, isRTL, cardBg, border, textC, onPressItem,
+}: {
+    entry: CategoryEntry;
+    index: number;
+    isHidden: boolean;
+    isRTL: boolean;
+    cardBg: string;
+    border: string;
+    textC: string;
+    onPressItem: (id: string) => void;
+}) => {
+    const handlePress = useCallback(() => onPressItem(entry.id), [onPressItem, entry.id]);
+
+    return (
+        <Animated.View entering={FadeInDown.delay(Math.min(index, 15) * 30).duration(350).springify()}>
+            <TVPressable
+                onPress={handlePress}
+                style={[styles.row, { backgroundColor: cardBg, borderColor: border }]}
+                focusVariant="card"
+            >
+                <View style={styles.rowInfo}>
+                    <Text style={[styles.rowTitle, { color: textC, fontFamily: FontFamily.medium }]} numberOfLines={1}>
+                        {entry.name}
+                    </Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: isHidden ? '#ef444420' : '#22c55e20' }]}>
+                    <Text style={[styles.badgeText, { color: isHidden ? '#ef4444' : '#22c55e', fontFamily: FontFamily.bold }]}>
+                        {isHidden ? (isRTL ? 'مخفي' : 'Hidden') : (isRTL ? 'ظاهر' : 'Visible')}
+                    </Text>
+                </View>
+            </TVPressable>
+        </Animated.View>
+    );
+});
+CategoryRow.displayName = 'CategoryRow';
 
 export default function ContentLockScreen() {
     const { type } = useLocalSearchParams<{ type?: string }>();
@@ -61,6 +99,26 @@ export default function ContentLockScreen() {
     }, [query, categories]);
 
     const hiddenCount = hiddenCategories[lockType].length;
+    const hiddenSet = hiddenCategories[lockType];
+
+    const handleTogglePress = useCallback((id: string) => {
+        void toggleHiddenCategory(lockType, id);
+    }, [lockType, toggleHiddenCategory]);
+
+    const keyExtractor = useCallback((entry: CategoryEntry) => entry.id, []);
+
+    const renderItem = useCallback(({ item, index }: { item: CategoryEntry; index: number }) => (
+        <CategoryRow
+            entry={item}
+            index={index}
+            isHidden={hiddenSet.includes(item.id)}
+            isRTL={isRTL}
+            cardBg={cardBg}
+            border={border}
+            textC={textC}
+            onPressItem={handleTogglePress}
+        />
+    ), [hiddenSet, isRTL, cardBg, border, textC, handleTogglePress]);
 
     return (
         <View style={[styles.root, { backgroundColor: bg }]}>
@@ -97,45 +155,20 @@ export default function ContentLockScreen() {
                         <ActivityIndicator size="large" color={Brand.primary} />
                     </View>
                 ) : (
-                    <ScrollView contentContainerStyle={styles.list}>
-                        {filtered.map((entry, idx) => {
-                            const isHidden = hiddenCategories[lockType].includes(entry.id);
-                            const onPress = () => {
-                                void toggleHiddenCategory(lockType, entry.id);
-                            };
-
-                            return (
-                                <Animated.View
-                                    key={entry.id}
-                                    entering={FadeInDown.delay(Math.min(idx, 15) * 30).duration(350).springify()}
-                                >
-                                    <TVPressable
-                                        onPress={onPress}
-                                        style={[styles.row, { backgroundColor: cardBg, borderColor: border }]}
-                                        focusVariant="card"
-                                    >
-                                        <View style={styles.rowInfo}>
-                                            <Text style={[styles.rowTitle, { color: textC, fontFamily: FontFamily.medium }]} numberOfLines={1}>
-                                                {entry.name}
-                                            </Text>
-                                        </View>
-                                        <View style={[styles.badge, { backgroundColor: isHidden ? '#ef444420' : '#22c55e20' }]}>
-                                            <Text style={[styles.badgeText, { color: isHidden ? '#ef4444' : '#22c55e', fontFamily: FontFamily.bold }]}>
-                                                {isHidden ? (isRTL ? 'مخفي' : 'Hidden') : (isRTL ? 'ظاهر' : 'Visible')}
-                                            </Text>
-                                        </View>
-                                    </TVPressable>
-                                </Animated.View>
-                            );
-                        })}
-                        {filtered.length === 0 && (
+                    <FlatList
+                        data={filtered}
+                        keyExtractor={keyExtractor}
+                        renderItem={renderItem}
+                        contentContainerStyle={styles.list}
+                        removeClippedSubviews={!isTV}
+                        ListEmptyComponent={
                             <View style={styles.center}>
                                 <Text style={[styles.empty, { color: subC, fontFamily: FontFamily.medium }]}>
                                     {isRTL ? 'لا توجد نتائج' : 'No results'}
                                 </Text>
                             </View>
-                        )}
-                    </ScrollView>
+                        }
+                    />
                 )}
             </SafeAreaView>
         </View>
