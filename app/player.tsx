@@ -237,6 +237,7 @@ export default function PlayerScreen() {
     const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const slidingRef = useRef(false);
     const resumeAppliedRef = useRef(false);
+    const vodAutoRetriedRef = useRef(false);
     const videoViewRef = useRef<any>(null);
 
     // Migrated from React Native's core Animated to reanimated, matching every
@@ -647,13 +648,36 @@ export default function PlayerScreen() {
                 if (tryNextFallback()) return;
             }
 
+            // VOD has no fallback URL list to cycle through, so a single
+            // transient network blip on a movie/series went straight to the
+            // manual error overlay. One bounded, silent retry (same URL,
+            // same replaceAsync-then-play pattern as handleRetry) mirrors
+            // live's resilience without risking a loop - the ref guarantees
+            // this only ever fires once per screen.
+            if (!isLive && !vodAutoRetriedRef.current) {
+                vodAutoRetriedRef.current = true;
+                (async () => {
+                    try {
+                        if (typeof (expoPlayer as any).replaceAsync === 'function') {
+                            await (expoPlayer as any).replaceAsync(videoSource);
+                        } else {
+                            expoPlayer.replace(videoSource);
+                        }
+                        expoPlayer.play();
+                    } catch {
+                        // Falls through to the manual error overlay via the next statusChange event.
+                    }
+                })();
+                return;
+            }
+
             const audioError = diagnoseNativeAudioError(error?.message);
             if (audioError) setAudioDiagnostic(audioError);
             setPlayerStatus('error');
         });
         setPlayerStatus(expoPlayer.status as PlayerStatus);
         return () => { try { sub.remove(); } catch { /* released across a source replace */ } };
-    }, [expoPlayer, fallbackUrls.length, isLive, tryNextFallback]);
+    }, [expoPlayer, fallbackUrls.length, isLive, tryNextFallback, videoSource]);
 
     useEffect(() => {
         if (isWeb) return;
