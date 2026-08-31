@@ -142,13 +142,7 @@ export default function WatchLaterScreen() {
     const textColor = isDark ? Colors.dark.text : Colors.light.text;
     const subColor = isDark ? Colors.dark.textSecondary : Colors.light.textSecondary;
 
-    useFocusEffect(
-        useCallback(() => {
-            loadItems();
-        }, [])
-    );
-
-    const loadItems = async () => {
+    const loadItems = useCallback(async () => {
         const [watchLater, downloads] = await Promise.all([
             watchHistoryService.getWatchLater(),
             downloadService.getDownloads(),
@@ -160,7 +154,13 @@ export default function WatchLaterScreen() {
         }));
         const downloadIds = new Set(downloadedItems.map((item) => item.id));
         setItems([...downloadedItems, ...watchLater.filter((item) => !downloadIds.has(item.id))]);
-    };
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadItems();
+        }, [loadItems])
+    );
 
     const handlePress = useCallback((item: LibraryItem) => {
         if (item.downloadStatus === 'completed' && item.localUri) {

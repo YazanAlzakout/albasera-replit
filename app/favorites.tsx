@@ -122,16 +122,16 @@ export default function FavoritesScreen() {
     const textColor = isDark ? Colors.dark.text : Colors.light.text;
     const subColor = isDark ? Colors.dark.textSecondary : Colors.light.textSecondary;
 
+    const loadItems = useCallback(async () => {
+        const list = await watchHistoryService.getFavorites();
+        setItems(list);
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             loadItems();
-        }, [])
+        }, [loadItems])
     );
-
-    const loadItems = async () => {
-        const list = await watchHistoryService.getFavorites();
-        setItems(list);
-    };
 
     const handlePress = useCallback((item: WatchedItem) => {
         router.push({
